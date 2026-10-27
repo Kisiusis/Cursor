@@ -1,0 +1,46 @@
+{
+  "name": "print-calculator",
+  "version": "1.0.0",
+  "description": "Калькулятор печати — окно Windows вокруг исходного HTML без изменений вёрстки",
+  "main": "main.js",
+  "author": "Print Calculator",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "verify": "electron scripts/verify.js",
+    "build:win": "electron-builder --win portable --x64"
+  },
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "ru.print.calculator",
+    "productName": "Калькулятор печати",
+    "executableName": "PrintCalculator",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "Калькулятор-печати.${ext}"
+    }
+  }
+}
