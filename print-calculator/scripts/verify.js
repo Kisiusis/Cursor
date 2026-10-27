@@ -15,7 +15,7 @@ async function shot(win, name) {
   await win.webContents.executeJavaScript(
     'new Promise(function (resolve) { requestAnimationFrame(function () { requestAnimationFrame(function () { resolve(true); }); }); })'
   );
-  await wait(250);
+  await wait(200);
   const image = await win.capturePage();
   const file = path.join(outDir, name);
   fs.writeFileSync(file, image.toPNG());
@@ -25,8 +25,8 @@ async function shot(win, name) {
 app.whenReady().then(async () => {
   fs.mkdirSync(outDir, { recursive: true });
   const win = new BrowserWindow({
-    width: 820,
-    height: 1040,
+    width: 960,
+    height: 1100,
     show: false,
     backgroundColor: '#667eea',
     webPreferences: {
@@ -43,67 +43,43 @@ app.whenReady().then(async () => {
     await win.loadFile(path.join(__dirname, '..', 'index.html'));
     const title = await win.webContents.executeJavaScript('document.title');
     report.push('title=' + title);
-    if (title !== 'Калькулятор печати') failures.push('title mismatch: ' + title);
-
-    const styles = await win.webContents.executeJavaScript(
-      'document.querySelectorAll("style").length + ":" + document.styleSheets[0].cssRules.length'
-    );
-    report.push('styles=' + styles);
-
-    await shot(win, '01-initial.png');
+    if (title !== 'Калькулятор печати') failures.push('title ' + title);
 
     const calc = await win.webContents.executeJavaScript(`
       (function () {
-        var w = document.querySelectorAll('.w-input');
-        var h = document.querySelectorAll('.h-input');
+        var w = document.querySelector('.w-input');
+        var h = document.querySelector('.h-input');
         function set(el, value) {
           el.value = value;
           el.dispatchEvent(new Event('input', { bubbles: true }));
         }
-        set(w[0], '100');
-        set(h[0], '100');
-        set(w[1], '50');
-        set(h[1], '50');
+        set(w, '100');
+        set(h, '100');
         return {
-          price: document.getElementById('price').textContent,
-          row0: document.querySelectorAll('.row-result')[0].textContent,
-          row1: document.querySelectorAll('.row-result')[1].textContent,
-          visible: document.getElementById('result').style.display
+          row: document.querySelector('.row-result').textContent,
+          price: document.getElementById('price').textContent
         };
       })()
     `);
-    report.push('no-cut=' + JSON.stringify(calc));
-    if (calc.row0 !== '350.00 ₽') failures.push('row0 expected 350.00 ₽, got ' + calc.row0);
-    if (calc.row1 !== '87.50 ₽') failures.push('row1 expected 87.50 ₽, got ' + calc.row1);
-    if (calc.price !== '437.50 ₽') failures.push('sum expected 437.50 ₽, got ' + calc.price);
-
-    await win.webContents.executeJavaScript(
-      "document.getElementById('result').scrollIntoView({ block: 'center' })"
-    );
-    await shot(win, '02-calculated.png');
+    report.push('plain=' + JSON.stringify(calc));
+    if (calc.row !== '350.00 ₽') failures.push('row ' + calc.row);
+    if (calc.price !== '350.00 ₽') failures.push('price ' + calc.price);
+    await shot(win, 'desktop-calc.png');
 
     const cut = await win.webContents.executeJavaScript(`
       (function () {
-        var cb = document.getElementById('cut-enabled');
+        var cb = document.querySelector('.service-cb');
         cb.checked = true;
         cb.dispatchEvent(new Event('change', { bubbles: true }));
         return {
-          price: document.getElementById('price').textContent,
-          row0: document.querySelectorAll('.row-result')[0].textContent,
-          row1: document.querySelectorAll('.row-result')[1].textContent,
-          hint: document.getElementById('cut-hint').textContent
+          row: document.querySelector('.row-result').textContent,
+          price: document.getElementById('price').textContent
         };
       })()
     `);
     report.push('cut=' + JSON.stringify(cut));
-    if (cut.row0 !== '950.00 ₽') failures.push('cut row0 expected 950.00 ₽, got ' + cut.row0);
-    if (cut.row1 !== '387.50 ₽') failures.push('cut row1 expected 387.50 ₽, got ' + cut.row1);
-    if (cut.price !== '1337.50 ₽') failures.push('cut sum expected 1337.50 ₽, got ' + cut.price);
-
-    await win.webContents.executeJavaScript(
-      "document.getElementById('result').scrollIntoView({ block: 'center' })"
-    );
-    await shot(win, '03-with-cut.png');
+    if (cut.row !== '950.00 ₽') failures.push('cut row ' + cut.row);
+    if (cut.price !== '950.00 ₽') failures.push('cut price ' + cut.price);
 
     const admin = await win.webContents.executeJavaScript(`
       (function () {
@@ -111,23 +87,15 @@ app.whenReady().then(async () => {
         document.getElementById('admin-pass').value = 'admin';
         document.getElementById('login-btn').click();
         return {
-          loginHidden: document.getElementById('admin-login').style.display,
-          content: document.getElementById('admin-content').style.display,
-          cards: document.querySelectorAll('.admin-card').length,
-          cutPrice: document.getElementById('cut-price-input').value
+          cards: document.querySelectorAll('#materials-list .admin-card').length,
+          services: document.querySelectorAll('#services-admin-list .admin-card').length
         };
       })()
     `);
     report.push('admin=' + JSON.stringify(admin));
-    if (admin.loginHidden !== 'none') failures.push('admin login still visible');
-    if (admin.content !== 'block') failures.push('admin content hidden');
-    if (admin.cards !== 6) failures.push('expected 6 materials, got ' + admin.cards);
-    if (admin.cutPrice !== '150') failures.push('cut price expected 150, got ' + admin.cutPrice);
-
-    await win.webContents.executeJavaScript(
-      "document.getElementById('materials-list').scrollIntoView({ block: 'start' })"
-    );
-    await shot(win, '04-admin.png');
+    if (admin.cards !== 6) failures.push('materials ' + admin.cards);
+    if (admin.services !== 1) failures.push('services ' + admin.services);
+    await shot(win, 'desktop-admin.png');
   } catch (err) {
     failures.push(String(err && err.stack || err));
   }

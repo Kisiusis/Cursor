@@ -25,10 +25,12 @@
     "files": [
       "main.js",
       "index.html",
-      "package.json"
+      "package.json",
+      "build/icon.png"
     ],
     "asar": true,
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "portable",
