@@ -25,6 +25,7 @@
     "files": [
       "main.js",
       "index.html",
+      "vendor/**",
       "package.json",
       "build/icon.png"
     ],

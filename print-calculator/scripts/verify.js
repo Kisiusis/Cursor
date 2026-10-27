@@ -41,6 +41,15 @@ app.whenReady().then(async () => {
 
   try {
     await win.loadFile(path.join(__dirname, '..', 'index.html'));
+    const libs = await win.webContents.executeJavaScript(`({
+      html2canvas: typeof window.html2canvas === 'function',
+      jspdf: !!(window.jspdf && typeof window.jspdf.jsPDF === 'function'),
+      cdn: performance.getEntriesByType('resource').some(function (e) { return e.name.indexOf('cdnjs') !== -1; })
+    })`);
+    report.push('libs=' + JSON.stringify(libs));
+    if (!libs.html2canvas || !libs.jspdf) failures.push('pdf libs ' + JSON.stringify(libs));
+    if (libs.cdn) failures.push('cdn request');
+
     const title = await win.webContents.executeJavaScript('document.title');
     report.push('title=' + title);
     if (title !== 'Калькулятор печати') failures.push('title ' + title);

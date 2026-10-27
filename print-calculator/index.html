@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Калькулятор печати</title>
 
-<!-- PDF-библиотеки -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- PDF-библиотеки, лежат рядом со страницей, без загрузки из интернета -->
+<script src="vendor/html2canvas.min.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
 
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1345,7 +1345,7 @@ function buildPdfHtml(data) {
 async function exportCalculationToPdf(data) {
   if (!data) { showToast('Нет данных для PDF', true); return; }
   if (!isPdfLibReady()) {
-    showToast('PDF-библиотека не загружена. Проверьте интернет-соединение.', true);
+    showToast('PDF-библиотека не загружена.', true);
     return;
   }
   showToast('Формируем PDF...');

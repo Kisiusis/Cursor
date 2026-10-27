@@ -1,13 +1,30 @@
 # Калькулятор печати
 
-Файл `index.html` не меняется: те же стили, разметка и расчёт.
+Страница `index.html` — та же вёрстка, стили и расчёт. Библиотеки PDF лежат в `vendor/` и не скачиваются при открытии.
 
-Готовые файлы лежат в этой же папке. Браузер часто пишет «вирус» на одиночный exe без платной подписи. Качайте архив, распакуйте и запустите программу внутри.
+Готовые файлы лежат в этой же папке:
 
-- [PrintCalculator-Windows.zip](PrintCalculator-Windows.zip) — Windows. Распакуйте и откройте `PrintCalculator.exe`. Если Windows покажет «Защита Windows», нажмите «Подробнее», затем «Выполнить в любом случае».
+- [PrintCalculator.exe](PrintCalculator.exe) — Windows, один файл. Запускается сразу, без распаковки браузера и без загрузки файлов из интернета. Окно называется «Калькулятор печати».
+- [PrintCalculator-Windows.zip](PrintCalculator-Windows.zip) — тот же exe в архиве.
 - [PrintCalculator-Android.zip](PrintCalculator-Android.zip) — Android. Распакуйте и откройте `PrintCalculator.apk`, затем разрешите установку.
 
-Страница внутри обоих файлов — тот же `index.html`, без другой вёрстки. Окно называется «Калькулятор печати». Иконка — принтер с калькулятором.
+Иконка — принтер с калькулятором. Настройки материалов сохраняются на этом компьютере.
+
+Если Windows один раз покажет «Защита Windows», нажмите «Подробнее», затем «Выполнить в любом случае». Файл собран без платной подписи. Программа не скачивает дополнительные файлы.
+
+На Windows 11 и обновлённой Windows 10 окно рисует системный компонент Microsoft Edge WebView2, который уже установлен в системе. Если его нет, программа покажет сообщение и остановится, ничего не скачивая.
+
+## Сборка Windows exe
+
+Нужен Go 1.22+.
+
+```bash
+cd print-calculator/windows
+go mod tidy
+./build.sh
+```
+
+Готовый файл: `print-calculator/PrintCalculator.exe`.
 
 ## Сборка Android apk
 
@@ -21,26 +38,10 @@ gradle wrapper
 cp app/build/outputs/apk/debug/app-debug.apk ../PrintCalculator.apk
 ```
 
-## Windows
-
-Десктопное окно для того же HTML. На Windows приложение собирается в один portable exe.
-
-Окно называется «Калькулятор печати». Файл запуска: `Калькулятор-печати.exe` (внутри процесса исполняемый файл `PrintCalculator.exe`). Настройки материалов и цена резки пишутся в localStorage и сохраняются между запусками.
-
-## Сборка Windows exe
-
-Нужны Node.js 22 и интернет (скачивается Electron для Windows).
+Проверка формул в том же HTML:
 
 ```bash
 cd print-calculator
 npm install
-npm run build:win
-```
-
-Готовый архив для скачивания: `print-calculator/PrintCalculator-Windows.zip`. Внутри него `PrintCalculator.exe`.
-
-Проверка интерфейса и формул без сборки exe:
-
-```bash
 npm run verify
 ```

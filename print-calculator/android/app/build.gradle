@@ -36,6 +36,9 @@ dependencies {
 tasks.register("copyWeb", Copy) {
     from "${rootDir}/../index.html"
     into "src/main/assets"
+    from("${rootDir}/../vendor") {
+        into "vendor"
+    }
 }
 
 tasks.named("preBuild").configure {
