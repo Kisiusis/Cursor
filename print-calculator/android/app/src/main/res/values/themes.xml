@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.PrintCalculator" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#667EEA</item>
+        <item name="android:navigationBarColor">#764BA2</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowBackground">#667EEA</item>
+        <item name="android:colorBackground">#667EEA</item>
+    </style>
+</resources>

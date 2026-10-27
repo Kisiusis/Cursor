@@ -1,6 +1,24 @@
 # Калькулятор печати
 
-Десктопное окно для исходного HTML. Файл `index.html` не меняется: те же стили, разметка и расчёт. На Windows приложение собирается в один portable exe.
+Файл `index.html` не меняется: те же стили, разметка и расчёт.
+
+Готовый Android-файл лежит в этой же папке: [PrintCalculator.apk](PrintCalculator.apk). Его ставят на телефон как обычное приложение (разрешение на установку из неизвестных источников). Окно называется «Калькулятор печати».
+
+## Сборка Android apk
+
+Нужны JDK 17+ и Android SDK (platform 35, build-tools 35).
+
+```bash
+cd print-calculator/android
+echo "sdk.dir=$ANDROID_HOME" > local.properties
+gradle wrapper
+./gradlew assembleDebug
+cp app/build/outputs/apk/debug/app-debug.apk ../PrintCalculator.apk
+```
+
+## Windows
+
+Десктопное окно для того же HTML. На Windows приложение собирается в один portable exe.
 
 Окно называется «Калькулятор печати». Файл запуска: `Калькулятор-печати.exe` (внутри процесса исполняемый файл `PrintCalculator.exe`). Настройки материалов и цена резки пишутся в localStorage и сохраняются между запусками.
 
