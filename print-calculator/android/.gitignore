@@ -1,0 +1,7 @@
+.gradle/
+build/
+local.properties
+captures/
+app/src/main/assets/
+*.iml
+.cxx/
