@@ -2,14 +2,24 @@ const { app, BrowserWindow } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-gpu');
+
 const outDir = process.env.VERIFY_OUT || path.join(__dirname, '..', 'verify-out');
 
-function shot(win, name) {
-  return win.capturePage().then((image) => {
-    const file = path.join(outDir, name);
-    fs.writeFileSync(file, image.toPNG());
-    return file;
-  });
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function shot(win, name) {
+  await win.webContents.executeJavaScript(
+    'new Promise(function (resolve) { requestAnimationFrame(function () { requestAnimationFrame(function () { resolve(true); }); }); })'
+  );
+  await wait(250);
+  const image = await win.capturePage();
+  const file = path.join(outDir, name);
+  fs.writeFileSync(file, image.toPNG());
+  return file;
 }
 
 app.whenReady().then(async () => {
@@ -67,6 +77,9 @@ app.whenReady().then(async () => {
     if (calc.row1 !== '87.50 ₽') failures.push('row1 expected 87.50 ₽, got ' + calc.row1);
     if (calc.price !== '437.50 ₽') failures.push('sum expected 437.50 ₽, got ' + calc.price);
 
+    await win.webContents.executeJavaScript(
+      "document.getElementById('result').scrollIntoView({ block: 'center' })"
+    );
     await shot(win, '02-calculated.png');
 
     const cut = await win.webContents.executeJavaScript(`
@@ -87,6 +100,9 @@ app.whenReady().then(async () => {
     if (cut.row1 !== '387.50 ₽') failures.push('cut row1 expected 387.50 ₽, got ' + cut.row1);
     if (cut.price !== '1337.50 ₽') failures.push('cut sum expected 1337.50 ₽, got ' + cut.price);
 
+    await win.webContents.executeJavaScript(
+      "document.getElementById('result').scrollIntoView({ block: 'center' })"
+    );
     await shot(win, '03-with-cut.png');
 
     const admin = await win.webContents.executeJavaScript(`
@@ -108,6 +124,9 @@ app.whenReady().then(async () => {
     if (admin.cards !== 6) failures.push('expected 6 materials, got ' + admin.cards);
     if (admin.cutPrice !== '150') failures.push('cut price expected 150, got ' + admin.cutPrice);
 
+    await win.webContents.executeJavaScript(
+      "document.getElementById('materials-list').scrollIntoView({ block: 'start' })"
+    );
     await shot(win, '04-admin.png');
   } catch (err) {
     failures.push(String(err && err.stack || err));
