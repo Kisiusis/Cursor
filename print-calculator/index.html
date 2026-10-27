@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Калькулятор печати</title>
+
+<!-- PDF-библиотеки, лежат рядом со страницей, без загрузки из интернета -->
+<script src="vendor/html2canvas.min.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
+
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -15,10 +20,28 @@
   .container {
     background: #fff; border-radius: 16px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-    width: 100%; max-width: 680px;
-    padding: 30px; margin-top: 20px;
+    width: 100%; max-width: 760px;
+    padding: 30px; margin-top: 20px; position: relative;
   }
-  h1 { text-align: center; color: #333; margin-bottom: 25px; font-size: 24px; }
+
+  /* Имя клиента в углу */
+  .client-name-box {
+    position: absolute; top: 15px; right: 20px;
+    display: flex; align-items: center; gap: 6px;
+    background: #f0f2ff; border: 1.5px solid #c5cdf8;
+    border-radius: 8px; padding: 5px 8px 5px 10px;
+  }
+  .client-name-box label {
+    font-size: 11px; color: #667eea; font-weight: 700;
+    margin: 0; white-space: nowrap;
+  }
+  .client-name-box input {
+    width: 130px; padding: 5px 8px; border: none; background: #fff;
+    border-radius: 5px; font-size: 13px; font-weight: 600; color: #333; outline: none;
+  }
+  .client-name-box input::placeholder { color: #b0b6d4; font-weight: 400; }
+
+  h1 { text-align: center; color: #333; margin-bottom: 25px; font-size: 24px; padding: 0 150px; }
   .tabs { display: flex; gap: 8px; margin-bottom: 25px; border-bottom: 2px solid #eee; }
   .tab {
     flex: 1; padding: 12px; background: none; border: none;
@@ -26,26 +49,49 @@
     border-bottom: 3px solid transparent; transition: all 0.2s;
   }
   .tab.active { color: #667eea; border-bottom-color: #667eea; }
-  .panel { display: none; }
-  .panel.active { display: block; }
+  .panel { display: none; } .panel.active { display: block; }
+
+  .storage-banner {
+    background: #fff8e1; border: 2px solid #ffc107;
+    color: #795548; padding: 12px 16px; border-radius: 10px;
+    margin-bottom: 20px; font-size: 13px; line-height: 1.5;
+  }
+  .storage-banner b { color: #e65100; }
+  .storage-banner.ok { background: #e8f5e9; border-color: #4caf50; color: #2e7d32; }
+  .storage-banner.ok b { color: #1b5e20; }
 
   .field { margin-bottom: 15px; }
   label { display: block; margin-bottom: 6px; color: #444; font-weight: 600; font-size: 14px; }
   input, select {
-    width: 100%; padding: 12px 14px;
-    border: 2px solid #e0e0e0; border-radius: 10px;
-    font-size: 15px; outline: none; transition: border-color 0.2s;
+    width: 100%; padding: 12px 14px; border: 2px solid #e0e0e0;
+    border-radius: 10px; font-size: 15px; outline: none; transition: border-color 0.2s;
   }
   input:focus, select:focus { border-color: #667eea; }
 
-  /* Чекбокс резки */
+  .units-bar {
+    display: flex; align-items: center; gap: 12px;
+    background: #eef1ff; border: 2px solid #c5cdf8;
+    border-radius: 12px; padding: 12px 16px; margin-bottom: 15px;
+  }
+  .units-label { font-weight: 700; color: #4a54a8; font-size: 14px; flex-shrink: 0; }
+  .units-hint { font-size: 12px; color: #667eea; flex: 1; }
+  .units-segmented {
+    display: flex; gap: 4px; background: #fff;
+    border-radius: 8px; padding: 3px; border: 1px solid #c5cdf8;
+  }
+  .units-segmented button {
+    border: none; background: transparent; padding: 6px 14px;
+    border-radius: 6px; font-weight: 700; font-size: 13px;
+    color: #667eea; cursor: pointer; transition: all 0.15s;
+  }
+  .units-segmented button.active { background: #667eea; color: #fff; }
+  .units-segmented button:hover:not(.active) { background: #eef1ff; }
+
   .checkbox-row {
     display: flex; align-items: center; gap: 10px;
     padding: 12px 16px; background: #f8f9ff;
     border: 2px solid #e0e5f5; border-radius: 10px;
-    cursor: pointer; user-select: none;
-    transition: border-color 0.2s, background 0.2s;
-    margin-bottom: 15px;
+    cursor: pointer; user-select: none; transition: all 0.2s; margin-bottom: 8px;
   }
   .checkbox-row:hover { border-color: #667eea; }
   .checkbox-row.checked { border-color: #667eea; background: #eef1ff; }
@@ -56,83 +102,79 @@
   .cb-text { font-weight: 600; color: #333; font-size: 15px; }
   .cb-hint { font-size: 12px; color: #888; margin-top: 2px; }
 
-  /* Строки размеров */
   .calc-rows { display: flex; flex-direction: column; gap: 6px; }
   .calc-row {
-    display: grid;
-    grid-template-columns: 32px 1fr 18px 1fr 100px;
-    gap: 8px; align-items: center;
-    padding: 6px 10px;
-    border: 2px solid #e8ebf5;
-    border-radius: 10px;
-    transition: border-color 0.15s, background 0.15s;
+    display: grid; grid-template-columns: 32px 1fr 18px 1fr 100px 34px;
+    gap: 8px; align-items: center; padding: 6px 10px;
+    border: 2px solid #e8ebf5; border-radius: 10px; transition: all 0.15s;
   }
   .calc-row.header {
-    background: transparent; border: none;
-    padding: 4px 10px; font-size: 12px;
-    color: #8891b5; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.3px;
+    background: transparent; border: none; padding: 4px 10px;
+    font-size: 12px; color: #8891b5; font-weight: 700; text-transform: uppercase;
   }
-  .calc-row.has-data {
-    border-color: #a5b0ff; background: #f8f9ff;
+  .calc-row.has-data { border-color: #a5b0ff; background: #f8f9ff; }
+  .calc-row .row-num { font-size: 12px; font-weight: 700; color: #8891b5; text-align: center; }
+  .calc-row .x { font-size: 13px; color: #8891b5; text-align: center; }
+  .calc-row input { padding: 8px 10px; font-size: 14px; border-width: 1.5px; border-radius: 8px; }
+  .calc-row .row-result { font-size: 13px; font-weight: 700; color: #667eea; text-align: right; white-space: nowrap; }
+  .calc-row .row-del {
+    background: transparent; border: none; width: 30px; height: 30px;
+    border-radius: 8px; cursor: pointer; font-size: 18px; color: #c7cee3;
+    font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0;
   }
-  .calc-row .row-num {
-    font-size: 12px; font-weight: 700;
-    color: #8891b5; text-align: center;
-  }
-  .calc-row .x {
-    font-size: 13px; color: #8891b5; text-align: center;
-  }
-  .calc-row input {
-    padding: 8px 10px; font-size: 14px;
-    border-width: 1.5px; border-radius: 8px;
-  }
-  .calc-row .row-result {
-    font-size: 13px; font-weight: 700;
-    color: #667eea; text-align: right;
-    white-space: nowrap;
-  }
+  .calc-row .row-del:hover { background: #fff0f2; color: #ff4757; }
+  .calc-row .row-del.empty-state { opacity: 0.3; cursor: not-allowed; }
 
+  .add-row-btn {
+    width: 100%; padding: 12px; background: #fff;
+    border: 2px dashed #667eea; color: #667eea;
+    border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 14px; margin-top: 10px;
+  }
+  .add-row-btn:hover { background: #f0f2ff; border-style: solid; }
   .clear-btn {
-    width: 100%; padding: 10px;
-    background: transparent; border: 2px dashed #d0d5e8;
-    color: #8891b5; border-radius: 10px;
-    cursor: pointer; font-weight: 600;
-    font-size: 13px; margin-top: 10px;
-    transition: all 0.15s;
+    width: 100%; padding: 10px; background: transparent;
+    border: 2px dashed #d0d5e8; color: #8891b5;
+    border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 13px; margin-top: 8px;
   }
   .clear-btn:hover { border-color: #ff4757; color: #ff4757; }
 
-  /* Переключатель суммы */
   .sum-toggle {
     display: flex; align-items: center; gap: 12px;
     padding: 14px 16px; background: #f8f9ff;
     border: 2px solid #e0e5f5; border-radius: 12px;
-    margin: 15px 0; font-weight: 600;
-    color: #333; cursor: pointer; user-select: none;
-    transition: border-color 0.2s, background 0.2s;
+    margin: 15px 0 10px 0; font-weight: 600; color: #333;
+    cursor: pointer; user-select: none;
   }
-  .sum-toggle:hover { border-color: #667eea; }
   .sum-toggle.checked { border-color: #667eea; background: #eef1ff; }
   .sum-toggle .txt { flex: 1; font-size: 15px; }
-  .switch {
-    position: relative; display: inline-block;
-    width: 44px; height: 24px; flex-shrink: 0;
-  }
+  .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
   .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
-  .slider {
-    position: absolute; cursor: pointer; inset: 0;
-    background: #ccc; border-radius: 24px; transition: 0.3s;
-  }
+  .slider { position: absolute; cursor: pointer; inset: 0; background: #ccc; border-radius: 24px; transition: 0.3s; }
   .slider::before {
-    content: ""; position: absolute;
-    height: 18px; width: 18px; left: 3px; bottom: 3px;
-    background: white; border-radius: 50%; transition: 0.3s;
+    content: ""; position: absolute; height: 18px; width: 18px;
+    left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.3s;
   }
   .switch input:checked + .slider { background: #667eea; }
   .switch input:checked + .slider::before { transform: translateX(20px); }
 
-  /* Результат */
+  .percent-bar {
+    display: flex; align-items: center; gap: 12px;
+    background: linear-gradient(135deg, #fff9f0, #fff4e6);
+    border: 2px solid #ffd8a8; border-radius: 12px; padding: 12px 16px; margin-bottom: 15px;
+  }
+  .pb-label { flex: 1; font-weight: 600; color: #8a5a1f; font-size: 14px; line-height: 1.3; }
+  .pb-hint { display: block; font-size: 11px; color: #b08050; font-weight: 500; margin-top: 2px; }
+  .percent-input-wrap {
+    display: flex; align-items: center; gap: 4px;
+    background: #fff; border: 2px solid #ffc98a;
+    border-radius: 10px; padding: 4px 12px 4px 4px; flex-shrink: 0;
+  }
+  .percent-input-wrap input {
+    width: 80px; padding: 8px; border: none; outline: none;
+    font-size: 16px; font-weight: 700; color: #e67e22; text-align: right; background: transparent;
+  }
+  .percent-sign { color: #e67e22; font-weight: 800; font-size: 16px; }
+
   .result {
     background: linear-gradient(135deg, #667eea, #764ba2);
     color: white; padding: 25px; border-radius: 12px;
@@ -140,37 +182,137 @@
   }
   .result .label { font-size: 14px; opacity: 0.9; margin-bottom: 8px; }
   .result .price { font-size: 38px; font-weight: bold; letter-spacing: 1px; }
-  .result .breakdown {
+  .result .price.discount { color: #ffe0b2; }
+  .result .price.markup { color: #a5f7b5; }
+  .breakdown {
     margin-top: 15px; padding-top: 15px;
     border-top: 1px solid rgba(255,255,255,0.25);
     font-size: 14px; text-align: left;
     display: flex; flex-direction: column; gap: 6px;
   }
-  .result .row-line {
-    display: flex; justify-content: space-between; gap: 10px;
-  }
-  .result .row-line span:last-child { font-weight: 700; white-space: nowrap; }
+  .breakdown .row-line { display: flex; justify-content: space-between; gap: 10px; }
+  .breakdown .row-line span:last-child { font-weight: 700; white-space: nowrap; }
+  .breakdown .row-line.adjust-line { color: #ffe0b2; }
+  .breakdown .row-line.markup-line { color: #a5f7b5; }
 
-  /* Админ */
+  .action-buttons-row { display: flex; gap: 10px; margin-top: 15px; }
+  .action-buttons-row button { flex: 1; }
+  .save-to-history-btn, .pdf-btn-main {
+    padding: 14px; border-radius: 10px; cursor: pointer;
+    font-weight: 700; font-size: 14px; transition: all 0.15s;
+    background: #fff;
+  }
+  .save-to-history-btn { border: 2px solid #2ecc71; color: #27ae60; }
+  .save-to-history-btn:hover { background: #eafaf1; }
+  .pdf-btn-main { border: 2px solid #e74c3c; color: #e74c3c; }
+  .pdf-btn-main:hover { background: #fff0f2; }
+  .save-to-history-btn:disabled, .pdf-btn-main:disabled {
+    opacity: 0.5; cursor: not-allowed; border-color: #ccc; color: #999;
+  }
+
+  .history-toolbar {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 10px; margin-bottom: 15px;
+  }
+  .history-toolbar h3 { color: #333; font-size: 17px; }
+  .history-count {
+    background: #eef1ff; color: #667eea;
+    padding: 3px 10px; border-radius: 12px;
+    font-size: 12px; font-weight: 700; margin-left: 8px;
+  }
+  .clear-history-btn {
+    padding: 8px 16px; background: #fff;
+    border: 2px solid #ff4757; color: #ff4757;
+    border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 13px;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .clear-history-btn:hover { background: #fff0f2; }
+  .clear-history-btn:disabled { opacity: 0.4; cursor: not-allowed; border-color: #ddd; color: #aaa; }
+
+  .history-empty { text-align: center; padding: 50px 20px; color: #8891b5; }
+  .history-empty .big-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+  .history-empty p { font-size: 14px; }
+
+  .history-list { display: flex; flex-direction: column; gap: 12px; }
+  .history-item {
+    background: #f8f9ff; border: 2px solid #e0e5f5;
+    border-radius: 12px; padding: 15px; position: relative;
+  }
+  .history-item-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 10px; margin-bottom: 10px; padding-bottom: 10px;
+    border-bottom: 1px dashed #d0d5e8; padding-right: 70px;
+  }
+  .history-client-name { font-size: 16px; font-weight: 700; color: #333; flex: 1; word-break: break-word; }
+  .history-client-name .no-name { color: #8891b5; font-weight: 600; font-style: italic; }
+  .history-date { font-size: 11px; color: #8891b5; white-space: nowrap; font-weight: 600; text-align: right; }
+  .history-item-body { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #555; }
+  .history-line { display: flex; justify-content: space-between; gap: 8px; }
+  .history-line .k { color: #8891b5; font-weight: 600; }
+  .history-line .v { color: #333; font-weight: 600; text-align: right; }
+  .history-total-row {
+    margin-top: 8px; padding-top: 8px; border-top: 1px dashed #d0d5e8;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .history-total-label { font-size: 12px; color: #8891b5; font-weight: 700; }
+  .history-total-value { font-size: 20px; font-weight: 800; color: #667eea; }
+  .history-total-value.discount { color: #e67e22; }
+  .history-total-value.markup { color: #27ae60; }
+
+  .history-item-actions {
+    position: absolute; top: 10px; right: 10px;
+    display: flex; gap: 4px;
+  }
+  .history-item-actions button {
+    background: #fff; border: 1px solid #d0d5e8;
+    border-radius: 6px; width: 28px; height: 28px; padding: 0;
+    cursor: pointer; font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .pdf-history-btn { color: #e74c3c; }
+  .pdf-history-btn:hover { background: #e74c3c; color: #fff; border-color: #e74c3c; }
+  .del-history-btn { color: #ff4757; border-color: #ffd0d4; }
+  .del-history-btn:hover { background: #ff4757; color: #fff; border-color: #ff4757; }
+
+  .services-list-history {
+    background: #fffbf0; border-radius: 6px; padding: 6px 8px;
+    margin-top: 4px; font-size: 12px; border: 1px solid #ffe4b5;
+  }
+  .services-list-history .srv-line {
+    display: flex; justify-content: space-between; gap: 6px;
+    padding: 2px 0; color: #8a5a1f;
+  }
+  .rows-history {
+    background: #fff; border-radius: 6px; padding: 6px 8px;
+    margin-top: 4px; font-size: 12px; border: 1px solid #e0e5f5;
+  }
+  .rows-history .row-sz {
+    display: flex; justify-content: space-between; gap: 6px;
+    padding: 2px 0; color: #555;
+  }
+
   .admin-section {
     background: #f8f9ff; border: 1px solid #e0e5f5;
     border-radius: 12px; padding: 15px; margin-bottom: 20px;
   }
   .admin-section h4 { margin-bottom: 12px; color: #333; font-size: 15px; }
-  .admin-section .field { margin-bottom: 0; }
   .admin-card {
     background: #f8f9ff; border: 1px solid #e0e5f5;
-    border-radius: 12px; padding: 15px; margin-bottom: 12px;
-    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    border-radius: 12px; padding: 12px; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   }
-  .admin-card input { width: 130px; padding: 8px 10px; font-size: 14px; }
+  .admin-card input { padding: 8px 10px; font-size: 14px; }
   .admin-card input[data-field="name"] { flex: 1; min-width: 130px; }
+  .admin-card input[data-field="price"] { width: 100px; }
+  .admin-card select { padding: 8px 10px; font-size: 14px; width: auto; min-width: 180px; }
   .admin-card .del-btn {
     background: #ff4757; color: #fff; border: none;
     border-radius: 8px; padding: 8px 14px;
     cursor: pointer; font-weight: 700; font-size: 15px;
   }
   .admin-card .del-btn:hover { background: #e63946; }
+  .admin-service-card { background: #fffbf0; border-color: #ffe4b5; }
 
   .login-box { text-align: center; padding: 40px 20px; }
   .login-box p { color: #666; margin-bottom: 15px; }
@@ -180,18 +322,17 @@
     border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 15px;
   }
   .hint { font-size: 12px; color: #888; margin-top: 8px; }
-  .add-material-btn {
+  .add-btn {
     width: 100%; padding: 12px; background: #fff;
     border: 2px dashed #667eea; color: #667eea;
     border-radius: 10px; cursor: pointer; font-weight: 600; margin-top: 10px;
   }
-  .add-material-btn:hover { background: #f0f2ff; }
+  .add-btn:hover { background: #f0f2ff; }
   .action {
     width: 100%; padding: 15px;
     background: linear-gradient(135deg, #667eea, #764ba2);
     color: white; border: none; border-radius: 10px;
-    font-size: 16px; font-weight: 600; cursor: pointer;
-    margin-top: 15px;
+    font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 15px;
   }
   .action:hover { filter: brightness(1.05); }
   .logout-btn {
@@ -199,18 +340,30 @@
     border: none; border-radius: 8px; margin-top: 10px;
     cursor: pointer; color: #666;
   }
+  .reset-btn {
+    width: 100%; padding: 10px; background: #fff;
+    border: 2px solid #ffb3ba; color: #d64550;
+    border-radius: 8px; margin-top: 10px;
+    cursor: pointer; font-weight: 600;
+  }
+  .reset-btn:hover { background: #fff5f6; }
+  .io-row { display: flex; gap: 10px; margin-top: 10px; }
+  .io-row button {
+    flex: 1; padding: 10px; border-radius: 8px;
+    cursor: pointer; font-weight: 600; font-size: 13px;
+    background: #fff; border: 2px solid #667eea; color: #667eea;
+  }
+  .io-row button:hover { background: #f0f2ff; }
 
-  /* Модалка и тост */
   .modal-overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.5);
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
     display: none; align-items: center; justify-content: center;
     z-index: 1000; padding: 20px;
   }
   .modal-overlay.show { display: flex; }
   .modal-box {
-    background: #fff; border-radius: 14px;
-    padding: 25px; max-width: 380px; width: 100%;
+    background: #fff; border-radius: 14px; padding: 25px;
+    max-width: 380px; width: 100%;
     box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;
   }
   .modal-box p { font-size: 16px; color: #333; margin-bottom: 20px; line-height: 1.4; }
@@ -229,25 +382,46 @@
     padding: 12px 24px; border-radius: 10px;
     font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
     opacity: 0; transition: all 0.3s; z-index: 2000;
+    max-width: 90%; word-break: break-word;
   }
   .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
   .toast.error { background: #e74c3c; }
 
-  @media (max-width: 480px) {
+  .services-list { display: flex; flex-direction: column; gap: 8px; }
+
+  @media (max-width: 640px) {
+    h1 { padding: 0; margin-top: 45px; font-size: 20px; }
+    .client-name-box { top: 10px; right: 10px; left: 10px; }
+    .client-name-box input { width: 100%; }
+    .action-buttons-row { flex-direction: column; }
+  }
+  @media (max-width: 520px) {
     .container { padding: 20px; }
-    .calc-row { grid-template-columns: 26px 1fr 14px 1fr 76px; gap: 5px; padding: 6px 8px; }
+    .units-bar { flex-wrap: wrap; }
+    .units-hint { flex-basis: 100%; order: 3; margin-top: 4px; }
+    .calc-row { grid-template-columns: 24px 1fr 12px 1fr 72px 28px; gap: 5px; padding: 6px 8px; }
     .calc-row input { padding: 6px 8px; font-size: 13px; }
     .calc-row .row-result { font-size: 12px; }
-    .calc-row.header { padding: 4px 8px; font-size: 10px; }
+    .percent-bar { flex-wrap: wrap; }
+    .pb-label { flex-basis: 100%; }
+    .percent-input-wrap { flex: 1; }
+    .percent-input-wrap input { width: 100%; text-align: center; }
   }
 </style>
 </head>
 <body>
 <div class="container">
+  <div class="client-name-box">
+    <label>Для кого:</label>
+    <input type="text" id="client-name" placeholder="Имя" autocomplete="off" maxlength="60">
+  </div>
+
   <h1>🖨️ Калькулятор печати</h1>
+  <div id="storage-banner"></div>
 
   <div class="tabs">
     <button class="tab active" data-tab="calc" type="button">Калькулятор</button>
+    <button class="tab" data-tab="history" type="button">📋 История</button>
     <button class="tab" data-tab="admin" type="button">⚙️ Админ</button>
   </div>
 
@@ -258,18 +432,31 @@
       <select id="material"></select>
     </div>
 
-    <label class="checkbox-row" id="cut-checkbox-label">
-      <input type="checkbox" id="cut-enabled">
-      <div>
-        <div class="cb-text">✂️ Резка по изображению (контуру)</div>
-        <div class="cb-hint" id="cut-hint">Считается по периметру: 2 × (Ш + В)</div>
+    <div class="units-bar">
+      <span class="units-label">Единицы:</span>
+      <div class="units-segmented" id="units-seg">
+        <button type="button" data-unit="mm">мм</button>
+        <button type="button" data-unit="cm" class="active">см</button>
+        <button type="button" data-unit="m">м</button>
       </div>
-    </label>
+      <span class="units-hint" id="units-hint">Площадь = (Ш × В) в выбранных единицах → перевод в м²</span>
+    </div>
 
     <div class="field">
-      <label>Размеры (см)</label>
-      <div class="calc-rows" id="rows-container"></div>
-      <button class="clear-btn" id="clear-btn" type="button">Очистить все строки</button>
+      <label>Дополнительные обработки</label>
+      <div class="services-list" id="services-container"></div>
+    </div>
+
+    <div class="field">
+      <label>Размеры</label>
+      <div class="calc-rows" id="rows-container">
+        <div class="calc-row header">
+          <span>#</span><span>Ширина</span><span></span><span>Высота</span>
+          <span style="text-align:right;">Стоимость</span><span></span>
+        </div>
+      </div>
+      <button class="add-row-btn" id="add-row-btn" type="button">+ Добавить размер</button>
+      <button class="clear-btn" id="clear-btn" type="button">Очистить все размеры</button>
     </div>
 
     <label class="sum-toggle" id="sum-toggle-label">
@@ -280,11 +467,42 @@
       </span>
     </label>
 
+    <div class="percent-bar">
+      <div class="pb-label">
+        Скидка / наценка на итог
+        <span class="pb-hint">− скидка, + наценка. Применяется к общей сумме.</span>
+      </div>
+      <div class="percent-input-wrap">
+        <input type="number" id="percent-input" step="0.1" placeholder="0" inputmode="decimal">
+        <span class="percent-sign">%</span>
+      </div>
+    </div>
+
     <div class="result" id="result" style="display:none;">
       <div class="label" id="result-label">Итого</div>
       <div class="price" id="price">0 ₽</div>
       <div class="breakdown" id="breakdown"></div>
     </div>
+
+    <div class="action-buttons-row">
+      <button class="save-to-history-btn" id="save-history-btn" type="button" disabled>
+        💾 Сохранить в историю
+      </button>
+      <button class="pdf-btn-main" id="pdf-current-btn" type="button" disabled>
+        📄 Скачать PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- ИСТОРИЯ -->
+  <div class="panel" id="panel-history">
+    <div class="history-toolbar">
+      <h3>📋 История расчётов <span class="history-count" id="history-count">0</span></h3>
+      <button class="clear-history-btn" id="clear-history-btn" type="button" disabled>
+        🗑 Очистить историю
+      </button>
+    </div>
+    <div id="history-container"></div>
   </div>
 
   <!-- АДМИН -->
@@ -298,19 +516,29 @@
 
     <div id="admin-content" style="display:none;">
       <div class="admin-section">
-        <h4>⚙️ Общие настройки</h4>
-        <div class="field">
-          <label>Резка по контуру (₽ / погонный метр)</label>
-          <input type="number" id="cut-price-input" min="0" step="1" placeholder="например, 150">
-          <div class="hint">В калькуляторе: периметр (м) × эту цену</div>
+        <h4>🔧 Дополнительные обработки</h4>
+        <div class="hint" style="margin-bottom:10px;">
+          <b>₽/пог.м</b> — по периметру: 2×(Ш+В) в метрах × цена<br>
+          <b>₽/м²</b> — по площади: (Ш × В) в метрах × цена
         </div>
+        <div id="services-admin-list"></div>
+        <button class="add-btn" id="add-svc-btn" type="button">+ Добавить обработку</button>
       </div>
 
       <h3 style="margin-bottom:15px;color:#333;">Материалы и цены за м²</h3>
       <div id="materials-list"></div>
-      <button class="add-material-btn" id="add-mat-btn" type="button">+ Добавить материал</button>
-      <button class="action" id="save-btn" type="button">💾 Сохранить</button>
+      <button class="add-btn" id="add-mat-btn" type="button">+ Добавить материал</button>
+
+      <button class="action" id="save-btn" type="button">💾 Сохранить всё</button>
+
+      <div class="io-row">
+        <button id="export-btn" type="button">📤 Экспорт в файл</button>
+        <button id="import-btn" type="button">📥 Импорт из файла</button>
+      </div>
+      <input type="file" id="import-file" accept=".json,application/json" style="display:none;">
+
       <button class="logout-btn" id="logout-btn" type="button">Выйти</button>
+      <button class="reset-btn" id="reset-btn" type="button">⚠️ Сбросить все настройки</button>
     </div>
   </div>
 </div>
@@ -329,7 +557,6 @@
 
 <script>
 var ADMIN_PASSWORD = 'admin';
-var ROWS_COUNT = 10;
 
 var DEFAULT_MATERIALS = [
   { name: 'Баннерная ткань', price: 350 },
@@ -340,25 +567,95 @@ var DEFAULT_MATERIALS = [
   { name: 'Пенокартон', price: 700 }
 ];
 
-var DEFAULT_SETTINGS = { cutPrice: 150 };
+var DEFAULT_SETTINGS = {
+  services: [{ id: 'cut', name: 'Резка по контуру', price: 150, unit: 'lm' }]
+};
+
+var UNIT_FACTORS = { mm: 0.001, cm: 0.01, m: 1 };
+var UNIT_LABELS = { mm: 'мм', cm: 'см', m: 'м' };
 
 var materials = [];
 var settings = {};
-var pendingDeleteIdx = -1;
+var calcHistory = [];   /* ⚠️ не 'history' — конфликт с window.history */
+var currentUnit = 'cm';
+var pendingDelete = null;
 var toastTimer = null;
 
-/* ---------- Утилиты ---------- */
+/* ============ ХРАНИЛИЩЕ С FALLBACK ============ */
+var STORAGE_MODE = 'localStorage';
+var memoryStore = {};
+
+function detectStorage() {
+  try {
+    var ls = window.localStorage;
+    var k = '__t_' + Date.now();
+    ls.setItem(k, '1');
+    var ok = ls.getItem(k) === '1';
+    ls.removeItem(k);
+    return ok;
+  } catch (e) { return false; }
+}
+var HAS_LS = detectStorage();
+if (!HAS_LS) STORAGE_MODE = 'memory';
+
+function storageSet(key, value) {
+  var json;
+  try { json = JSON.stringify(value); } catch (e) { return false; }
+  if (HAS_LS) {
+    try {
+      window.localStorage.setItem(key, json);
+      if (window.localStorage.getItem(key) !== json) throw new Error('verify failed');
+      return true;
+    } catch (e) {
+      memoryStore[key] = json;
+      STORAGE_MODE = 'memory';
+      updateStorageBanner();
+      return false;
+    }
+  }
+  memoryStore[key] = json;
+  return true;
+}
+function storageGet(key) {
+  if (HAS_LS) {
+    try { return window.localStorage.getItem(key); }
+    catch (e) { STORAGE_MODE = 'memory'; updateStorageBanner(); }
+  }
+  return memoryStore[key] || null;
+}
+function storageRemove(key) {
+  if (HAS_LS) { try { window.localStorage.removeItem(key); } catch (e) {} }
+  delete memoryStore[key];
+}
+function updateStorageBanner() {
+  var b = document.getElementById('storage-banner');
+  if (!b) return;
+  if (STORAGE_MODE === 'localStorage') {
+    b.className = 'storage-banner ok';
+    b.innerHTML = '💾 <b>Хранение работает</b> — все настройки и история сохраняются на этом компьютере.';
+  } else {
+    b.className = 'storage-banner';
+    b.innerHTML = '⚠️ <b>Хранение только в памяти</b>. Документ открыт в песочнице — данные исчезнут при закрытии. Используйте <b>Экспорт / Импорт</b>.';
+  }
+}
+
+/* ============ УТИЛИТЫ ============ */
+function safeNum(v, f) { var n = Number(v); if (!isFinite(n) || n < 0) return f || 0; return n; }
+function safeStr(v, f) { if (v === undefined || v === null) return f || ''; var s = String(v); return s.length ? s : (f || ''); }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, function(c) {
-    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
   });
 }
 function showToast(msg, isError) {
-  var t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast show' + (isError ? ' error' : '');
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(function() { t.classList.remove('show'); }, 2500);
+  try {
+    var t = document.getElementById('toast');
+    if (!t) return;
+    t.textContent = String(msg);
+    t.className = 'toast show' + (isError ? ' error' : '');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { t.classList.remove('show'); }, 3200);
+  } catch (e) {}
 }
 function plural(n, forms) {
   var n10 = n % 10, n100 = n % 100;
@@ -366,37 +663,203 @@ function plural(n, forms) {
   if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return forms[1];
   return forms[2];
 }
+function uid(p) { return (p || 'id') + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5); }
+function formatDate(iso) {
+  try {
+    var d = new Date(iso);
+    var dd = String(d.getDate()).padStart(2, '0');
+    var mm = String(d.getMonth() + 1).padStart(2, '0');
+    var yyyy = d.getFullYear();
+    var hh = String(d.getHours()).padStart(2, '0');
+    var mi = String(d.getMinutes()).padStart(2, '0');
+    return dd + '.' + mm + '.' + yyyy + ' ' + hh + ':' + mi;
+  } catch (e) { return iso || ''; }
+}
 
-/* ---------- Хранилище ---------- */
+/* ============ ЗАГРУЗКА ============ */
 function loadMaterials() {
   try {
-    var s = localStorage.getItem('printMaterials');
-    if (s) { var p = JSON.parse(s); if (Array.isArray(p)) return p; }
-  } catch (e) { console.warn('load materials:', e); }
+    var s = storageGet('printMaterials');
+    if (s) {
+      var p = JSON.parse(s);
+      if (Array.isArray(p)) return p.map(function(m) {
+        return { name: safeStr(m && m.name, 'Материал'), price: safeNum(m && m.price, 0) };
+      });
+    }
+  } catch (e) {}
   return JSON.parse(JSON.stringify(DEFAULT_MATERIALS));
-}
-function saveMaterials() {
-  try { localStorage.setItem('printMaterials', JSON.stringify(materials)); return true; }
-  catch (e) { showToast('Ошибка сохранения материалов', true); return false; }
 }
 function loadSettings() {
   try {
-    var s = localStorage.getItem('printSettings');
+    var s = storageGet('printSettings');
     if (s) {
       var p = JSON.parse(s);
       if (p && typeof p === 'object') {
-        return { cutPrice: (typeof p.cutPrice === 'number' && p.cutPrice >= 0) ? p.cutPrice : DEFAULT_SETTINGS.cutPrice };
+        var r = {};
+        if (Array.isArray(p.services)) {
+          r.services = p.services.map(function(sv) {
+            return {
+              id: safeStr(sv && sv.id) || uid('svc'),
+              name: safeStr(sv && sv.name, 'Обработка'),
+              price: safeNum(sv && sv.price, 0),
+              unit: (sv && sv.unit === 'm2') ? 'm2' : 'lm'
+            };
+          });
+        } else if (typeof p.cutPrice === 'number' && p.cutPrice >= 0) {
+          r.services = [{ id: 'cut', name: 'Резка по контуру', price: p.cutPrice, unit: 'lm' }];
+        }
+        r.unit = (p.unit === 'mm' || p.unit === 'cm' || p.unit === 'm') ? p.unit : 'cm';
+        if (r.services) return r;
+        return { services: JSON.parse(JSON.stringify(DEFAULT_SETTINGS.services)), unit: r.unit };
       }
     }
-  } catch (e) { console.warn('load settings:', e); }
-  return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  } catch (e) {}
+  return { services: JSON.parse(JSON.stringify(DEFAULT_SETTINGS.services)), unit: 'cm' };
 }
+function loadHistory() {
+  try {
+    var s = storageGet('printHistory');
+    if (s) {
+      var p = JSON.parse(s);
+      if (Array.isArray(p)) return p.map(function(h) {
+        return {
+          id: safeStr(h && h.id) || uid('h'),
+          timestamp: safeStr(h && h.timestamp, new Date().toISOString()),
+          clientName: safeStr(h && h.clientName, ''),
+          unit: (h && (h.unit === 'mm' || h.unit === 'cm' || h.unit === 'm')) ? h.unit : 'cm',
+          materialName: safeStr(h && h.materialName, '—'),
+          materialPrice: safeNum(h && h.materialPrice, 0),
+          services: Array.isArray(h && h.services) ? h.services : [],
+          rows: Array.isArray(h && h.rows) ? h.rows : [],
+          subtotal: safeNum(h && h.subtotal, 0),
+          percent: Number(h && h.percent) || 0,
+          adjustment: Number(h && h.adjustment) || 0,
+          total: safeNum(h && h.total, 0)
+        };
+      });
+    }
+  } catch (e) {}
+  return [];
+}
+function saveMaterials() { return storageSet('printMaterials', materials); }
 function saveSettings() {
-  try { localStorage.setItem('printSettings', JSON.stringify(settings)); return true; }
-  catch (e) { showToast('Ошибка сохранения настроек', true); return false; }
+  settings.services = (settings.services || []).map(function(sv) {
+    return {
+      id: safeStr(sv.id) || uid('svc'),
+      name: safeStr(sv.name, 'Обработка'),
+      price: safeNum(sv.price, 0),
+      unit: sv.unit === 'm2' ? 'm2' : 'lm'
+    };
+  });
+  return storageSet('printSettings', { services: settings.services, unit: currentUnit });
+}
+function saveHistory() { return storageSet('printHistory', calcHistory); }
+
+/* ============ СОСТОЯНИЕ ============ */
+function getPercentValue() {
+  var el = document.getElementById('percent-input');
+  if (!el) return 0;
+  var n = parseFloat(el.value);
+  return isFinite(n) ? n : 0;
+}
+function saveCalcState() {
+  try {
+    var state = {
+      materialIdx: (document.getElementById('material') || {}).value || '',
+      sumEnabled: (document.getElementById('sum-enabled') || {}).checked !== false,
+      unit: currentUnit,
+      percent: (document.getElementById('percent-input') || {}).value || '',
+      clientName: (document.getElementById('client-name') || {}).value || '',
+      services: {}, rows: []
+    };
+    document.querySelectorAll('.service-cb').forEach(function(cb) {
+      if (cb.dataset.id) state.services[cb.dataset.id] = !!cb.checked;
+    });
+    document.querySelectorAll('.calc-row:not(.header)').forEach(function(row) {
+      state.rows.push({
+        w: (row.querySelector('.w-input') || {}).value || '',
+        h: (row.querySelector('.h-input') || {}).value || ''
+      });
+    });
+    storageSet('printCalcState', state);
+  } catch (e) {}
+}
+function loadCalcState() {
+  try {
+    var s = storageGet('printCalcState');
+    if (!s) return;
+    var state = JSON.parse(s);
+    if (state.unit && UNIT_FACTORS.hasOwnProperty(state.unit)) {
+      currentUnit = state.unit;
+      updateUnitsUI();
+    }
+    if (state.services && typeof state.services === 'object') {
+      Object.keys(state.services).forEach(function(id) {
+        var cb = document.querySelector('.service-cb[data-id="' + id + '"]');
+        if (cb) {
+          cb.checked = !!state.services[id];
+          var row = cb.closest('.checkbox-row');
+          if (row) row.classList.toggle('checked', cb.checked);
+        }
+      });
+    }
+    if (Array.isArray(state.rows) && state.rows.length > 0) {
+      ensureRowsCount(state.rows.length);
+      var rows = document.querySelectorAll('.calc-row:not(.header)');
+      state.rows.forEach(function(r, i) {
+        if (rows[i]) {
+          var wEl = rows[i].querySelector('.w-input');
+          var hEl = rows[i].querySelector('.h-input');
+          if (wEl) wEl.value = r.w || '';
+          if (hEl) hEl.value = r.h || '';
+        }
+      });
+    }
+    if (state.materialIdx !== undefined && state.materialIdx !== '') {
+      var sel = document.getElementById('material');
+      if (sel && sel.querySelector('option[value="' + state.materialIdx + '"]')) {
+        sel.value = state.materialIdx;
+      }
+    }
+    if (state.sumEnabled !== undefined) {
+      document.getElementById('sum-enabled').checked = state.sumEnabled;
+    }
+    if (state.percent !== undefined && state.percent !== null) {
+      document.getElementById('percent-input').value = state.percent;
+    }
+    if (state.clientName !== undefined && state.clientName !== null) {
+      document.getElementById('client-name').value = state.clientName;
+    }
+  } catch (e) {}
 }
 
-/* ---------- Вкладки ---------- */
+/* ============ ЕДИНИЦЫ ============ */
+function updateUnitsUI() {
+  document.querySelectorAll('#units-seg button').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.unit === currentUnit);
+  });
+  var hint = document.getElementById('units-hint');
+  if (hint) {
+    if (currentUnit === 'm') {
+      hint.innerHTML = 'Площадь = <b>Ш × В</b> (уже в метрах) → стоимость = площадь × цена';
+    } else {
+      hint.innerHTML = 'Площадь = (Ш × В) в ' + UNIT_LABELS[currentUnit] + ' → автоматически переводится в м²';
+    }
+  }
+  document.querySelectorAll('.calc-row:not(.header) input').forEach(function(inp) {
+    inp.placeholder = UNIT_LABELS[currentUnit];
+  });
+}
+function setUnit(u) {
+  if (!UNIT_FACTORS.hasOwnProperty(u)) return;
+  currentUnit = u;
+  updateUnitsUI();
+  calculateAll();
+  saveCalcState();
+  saveSettings();
+}
+
+/* ============ ВКЛАДКИ ============ */
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(function(t) {
     t.classList.toggle('active', t.dataset.tab === name);
@@ -404,33 +867,99 @@ function switchTab(name) {
   document.querySelectorAll('.panel').forEach(function(p) {
     p.classList.toggle('active', p.id === 'panel-' + name);
   });
+  if (name === 'history') renderHistory();
 }
 
-/* ---------- Строки калькулятора ---------- */
-function buildRows() {
+/* ============ СТРОКИ ============ */
+function createRowElement() {
+  var row = document.createElement('div');
+  row.className = 'calc-row';
+  row.innerHTML =
+    '<span class="row-num">1</span>' +
+    '<input type="number" class="w-input" min="0" step="0.01" placeholder="' + UNIT_LABELS[currentUnit] + '" inputmode="decimal">' +
+    '<span class="x">×</span>' +
+    '<input type="number" class="h-input" min="0" step="0.01" placeholder="' + UNIT_LABELS[currentUnit] + '" inputmode="decimal">' +
+    '<span class="row-result">—</span>' +
+    '<button class="row-del" type="button" title="Удалить строку">✕</button>';
+  row.querySelectorAll('input').forEach(function(inp) {
+    inp.addEventListener('input', function() { calculateAll(); saveCalcState(); });
+  });
+  row.querySelector('.row-del').addEventListener('click', function() { deleteRow(row); });
+  return row;
+}
+function addRow(values, focus) {
   var container = document.getElementById('rows-container');
-  var html = '<div class="calc-row header">' +
-    '<span>#</span><span>Ширина</span><span></span><span>Высота</span>' +
-    '<span style="text-align:right;">Стоимость</span></div>';
-
-  for (var i = 0; i < ROWS_COUNT; i++) {
-    html += '<div class="calc-row" data-row="' + i + '">' +
-      '<span class="row-num">' + (i + 1) + '</span>' +
-      '<input type="number" class="w-input" min="0" step="0.1" placeholder="см" inputmode="decimal">' +
-      '<span class="x">×</span>' +
-      '<input type="number" class="h-input" min="0" step="0.1" placeholder="см" inputmode="decimal">' +
-      '<span class="row-result">—</span>' +
-      '</div>';
+  var row = createRowElement();
+  if (values) {
+    row.querySelector('.w-input').value = values.w || '';
+    row.querySelector('.h-input').value = values.h || '';
   }
-  container.innerHTML = html;
-
-  container.querySelectorAll('input').forEach(function(inp) {
-    inp.addEventListener('input', calculateAll);
+  container.appendChild(row);
+  renumberRows();
+  updateDelButtons();
+  if (focus) row.querySelector('.w-input').focus();
+  return row;
+}
+function deleteRow(row) {
+  var container = document.getElementById('rows-container');
+  var rows = container.querySelectorAll('.calc-row:not(.header)');
+  if (rows.length <= 1) {
+    row.querySelectorAll('input').forEach(function(i) { i.value = ''; });
+    calculateAll();
+    saveCalcState();
+    showToast('Это последняя строка — значения очищены');
+    return;
+  }
+  row.remove();
+  renumberRows();
+  updateDelButtons();
+  calculateAll();
+  saveCalcState();
+}
+function renumberRows() {
+  document.querySelectorAll('.calc-row:not(.header)').forEach(function(row, i) {
+    var n = row.querySelector('.row-num');
+    if (n) n.textContent = i + 1;
   });
 }
+function updateDelButtons() {
+  var rows = document.querySelectorAll('.calc-row:not(.header)');
+  rows.forEach(function(row) {
+    var btn = row.querySelector('.row-del');
+    if (!btn) return;
+    if (rows.length === 1) {
+      btn.classList.add('empty-state');
+      btn.title = 'Последняя строка';
+    } else {
+      btn.classList.remove('empty-state');
+      btn.title = 'Удалить строку';
+    }
+  });
+}
+function ensureRowsCount(count) {
+  if (count < 1) count = 1;
+  var container = document.getElementById('rows-container');
+  var current = container.querySelectorAll('.calc-row:not(.header)').length;
+  if (current < count) {
+    for (var i = current; i < count; i++) container.appendChild(createRowElement());
+  } else if (current > count) {
+    var rows = container.querySelectorAll('.calc-row:not(.header)');
+    for (var j = rows.length - 1; j >= count; j--) rows[j].remove();
+  }
+  renumberRows();
+  updateDelButtons();
+}
+function clearAllRows() {
+  document.querySelectorAll('.calc-row:not(.header) input').forEach(function(inp) { inp.value = ''; });
+  calculateAll();
+  saveCalcState();
+  showToast('Все размеры очищены');
+}
 
+/* ============ МАТЕРИАЛЫ / ОБРАБОТКИ ============ */
 function renderMaterialSelect() {
   var sel = document.getElementById('material');
+  var prev = sel.value;
   if (materials.length === 0) {
     sel.innerHTML = '<option value="">— Нет материалов —</option>';
     return;
@@ -438,113 +967,643 @@ function renderMaterialSelect() {
   sel.innerHTML = materials.map(function(m, i) {
     return '<option value="' + i + '">' + escapeHtml(m.name) + ' — ' + m.price + ' ₽/м²</option>';
   }).join('');
+  if (prev !== '' && sel.querySelector('option[value="' + prev + '"]')) sel.value = prev;
 }
-
-function updateCutHint() {
-  var cb = document.getElementById('cut-enabled');
-  var label = document.getElementById('cut-checkbox-label');
-  label.classList.toggle('checked', cb.checked);
-  var hint = document.getElementById('cut-hint');
-  if (settings.cutPrice > 0) {
-    hint.textContent = 'Цена: ' + settings.cutPrice + ' ₽/пог.м • 2 × (Ш + В)';
-  } else {
-    hint.textContent = '⚠️ Цена резки не задана (укажите в админ-панели)';
-  }
-}
-
-/* ---------- Расчёт ---------- */
-function calculateAll() {
-  var idx = parseInt(document.getElementById('material').value, 10);
-  var matPrice = materials[idx] ? materials[idx].price : 0;
-  var withCut = document.getElementById('cut-enabled').checked;
-  var cutPrice = settings.cutPrice;
-
-  var results = [];
-  var rows = document.querySelectorAll('.calc-row:not(.header)');
-
-  rows.forEach(function(row, i) {
-    var wEl = row.querySelector('.w-input');
-    var hEl = row.querySelector('.h-input');
-    var resEl = row.querySelector('.row-result');
-    var w = parseFloat(wEl.value);
-    var h = parseFloat(hEl.value);
-
-    if (!w || !h || w <= 0 || h <= 0 || !materials[idx]) {
-      resEl.textContent = '—';
-      row.classList.remove('has-data');
-      return;
-    }
-
-    var area = (w / 100) * (h / 100);
-    var matCost = area * matPrice;
-    var perimeter = 2 * (w + h) / 100;
-    var cutCost = withCut ? perimeter * cutPrice : 0;
-    var total = matCost + cutCost;
-
-    results.push({
-      num: i + 1, w: w, h: h,
-      area: area, matCost: matCost,
-      perimeter: perimeter, cutCost: cutCost, total: total
-    });
-
-    resEl.textContent = total.toFixed(2) + ' ₽';
-    row.classList.add('has-data');
-  });
-
-  renderResult(results, withCut);
-}
-
-function renderResult(results, withCut) {
-  var resultBox = document.getElementById('result');
-  var sumEnabled = document.getElementById('sum-enabled').checked;
-
-  if (results.length === 0 || !sumEnabled) {
-    resultBox.style.display = 'none';
+function renderServices() {
+  var container = document.getElementById('services-container');
+  if (!settings.services || settings.services.length === 0) {
+    container.innerHTML = '<div style="color:#8891b5;font-size:13px;text-align:center;padding:12px;border:1px dashed #d0d5e8;border-radius:10px;">Обработки не заданы (настраиваются в админ-панели)</div>';
     return;
   }
-  resultBox.style.display = 'block';
-
-  var grandTotal = results.reduce(function(s, r) { return s + r.total; }, 0);
-  var materialSum = results.reduce(function(s, r) { return s + r.matCost; }, 0);
-  var cutSum = results.reduce(function(s, r) { return s + r.cutCost; }, 0);
-
-  document.getElementById('price').textContent = grandTotal.toFixed(2) + ' ₽';
-  document.getElementById('result-label').textContent =
-    'Итого (' + results.length + ' ' +
-    plural(results.length, ['позиция', 'позиции', 'позиций']) + ')';
-
-  var html = '';
-
-  // Разбивка по строкам
-  results.forEach(function(r) {
-    var detail = '№' + r.num + ': ' + r.w + '×' + r.h + ' см (' + r.area.toFixed(3) + ' м²';
-    if (withCut) detail += ' + ' + r.perimeter.toFixed(2) + ' пог.м';
-    detail += ')';
-    html += '<div class="row-line"><span>' + detail + '</span>' +
-      '<span>' + r.total.toFixed(2) + ' ₽</span></div>';
+  container.innerHTML = settings.services.map(function(svc) {
+    var unitLabel = svc.unit === 'm2' ? '₽ / м² (по площади)' : '₽ / пог.м (по периметру)';
+    return '<label class="checkbox-row" data-service-id="' + escapeHtml(svc.id) + '">' +
+      '<input type="checkbox" class="service-cb" data-id="' + escapeHtml(svc.id) + '">' +
+      '<div><div class="cb-text">' + escapeHtml(svc.name) + '</div><div class="cb-hint">' + svc.price + ' ' + unitLabel + '</div></div>' +
+    '</label>';
+  }).join('');
+  container.querySelectorAll('.service-cb').forEach(function(cb) {
+    cb.addEventListener('change', function() {
+      var r = cb.closest('.checkbox-row');
+      if (r) r.classList.toggle('checked', cb.checked);
+      calculateAll();
+      saveCalcState();
+    });
   });
+}
+function renderAdminServices() {
+  var list = document.getElementById('services-admin-list');
+  if (!settings.services || settings.services.length === 0) {
+    list.innerHTML = '<p style="color:#8891b5;text-align:center;padding:15px;font-size:14px;">Нет обработок.</p>';
+    return;
+  }
+  list.innerHTML = settings.services.map(function(svc) {
+    return '<div class="admin-card admin-service-card" data-svc-id="' + escapeHtml(svc.id) + '">' +
+      '<input type="text" value="' + escapeHtml(svc.name) + '" data-field="name" placeholder="Название">' +
+      '<input type="number" value="' + svc.price + '" min="0" step="1" data-field="price" placeholder="Цена">' +
+      '<select data-field="unit">' +
+        '<option value="lm"' + (svc.unit === 'lm' ? ' selected' : '') + '>₽ / пог.м</option>' +
+        '<option value="m2"' + (svc.unit === 'm2' ? ' selected' : '') + '>₽ / м²</option>' +
+      '</select>' +
+      '<button class="del-btn" data-del-svc="' + escapeHtml(svc.id) + '" type="button" title="Удалить">✕</button>' +
+    '</div>';
+  }).join('');
+}
+function renderAdminMaterials() {
+  var list = document.getElementById('materials-list');
+  if (materials.length === 0) {
+    list.innerHTML = '<p style="color:#8891b5;text-align:center;padding:15px;">Нет материалов.</p>';
+    return;
+  }
+  list.innerHTML = materials.map(function(m, i) {
+    return '<div class="admin-card">' +
+      '<input type="text" value="' + escapeHtml(m.name) + '" data-idx="' + i + '" data-field="name">' +
+      '<input type="number" value="' + m.price + '" min="0" step="1" data-idx="' + i + '" data-field="price" style="width:130px;">' +
+      '<span style="color:#888;font-size:13px;">₽/м²</span>' +
+      '<button class="del-btn" data-del="' + i + '" type="button">✕</button>' +
+    '</div>';
+  }).join('');
+}
+function renderAdmin() { renderAdminServices(); renderAdminMaterials(); }
 
-  // Сводка
-  html += '<div class="row-line" style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(255,255,255,0.3);opacity:0.95;">' +
-    '<span>Материал всего</span><span>' + materialSum.toFixed(2) + ' ₽</span></div>';
-  if (withCut && cutSum > 0) {
-    html += '<div class="row-line" style="opacity:0.95;">' +
-      '<span>✂️ Резка всего</span><span>' + cutSum.toFixed(2) + ' ₽</span></div>';
+/* ============ РАСЧЁТ ============ */
+function getEnabledServices() {
+  return (settings.services || []).filter(function(svc) {
+    var cb = document.querySelector('.service-cb[data-id="' + svc.id + '"]');
+    return cb && cb.checked;
+  });
+}
+function calculateAll() {
+  try {
+    var idx = parseInt(document.getElementById('material').value, 10);
+    var matPrice = materials[idx] ? materials[idx].price : 0;
+    var enabled = getEnabledServices();
+    var results = [];
+    var rows = document.querySelectorAll('.calc-row:not(.header)');
+    var factor = UNIT_FACTORS[currentUnit];
+    var unitLabel = UNIT_LABELS[currentUnit];
+
+    rows.forEach(function(row, i) {
+      var wEl = row.querySelector('.w-input');
+      var hEl = row.querySelector('.h-input');
+      var resEl = row.querySelector('.row-result');
+      var w = parseFloat(wEl.value);
+      var h = parseFloat(hEl.value);
+      if (!w || !h || w <= 0 || h <= 0 || !materials[idx]) {
+        resEl.textContent = '—';
+        row.classList.remove('has-data');
+        return;
+      }
+      var wM = w * factor, hM = h * factor;
+      var area = wM * hM;
+      var perimeter = 2 * (wM + hM);
+      var matCost = area * matPrice;
+      var services = enabled.map(function(svc) {
+        var base = svc.unit === 'm2' ? area : perimeter;
+        return { id: svc.id, name: svc.name, unit: svc.unit, price: svc.price, base: base, cost: base * svc.price };
+      });
+      var total = matCost + services.reduce(function(s, x) { return s + x.cost; }, 0);
+      results.push({
+        num: i + 1, w: w, h: h, unitLabel: unitLabel,
+        area: area, matCost: matCost, services: services, total: total
+      });
+      resEl.textContent = total.toFixed(2) + ' ₽';
+      row.classList.add('has-data');
+    });
+
+    renderResult(results, enabled);
+    updateActionButtons(results);
+  } catch (e) { console.error('[calculateAll]', e); }
+}
+function updateActionButtons(results) {
+  var saveBtn = document.getElementById('save-history-btn');
+  var pdfBtn = document.getElementById('pdf-current-btn');
+  var has = results.length > 0;
+  if (saveBtn) {
+    saveBtn.disabled = !has;
+    saveBtn.textContent = has ? '💾 Сохранить в историю' : '💾 Сохранить в историю (нет данных)';
+  }
+  if (pdfBtn) pdfBtn.disabled = !has;
+}
+function renderResult(results, enabledServices) {
+  var box = document.getElementById('result');
+  var sumEnabled = document.getElementById('sum-enabled').checked;
+  if (results.length === 0 || !sumEnabled) {
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = 'block';
+
+  var baseTotal = results.reduce(function(s, r) { return s + r.total; }, 0);
+  var materialSum = results.reduce(function(s, r) { return s + r.matCost; }, 0);
+  var percent = getPercentValue();
+  var adjustment = baseTotal * (percent / 100);
+  var finalTotal = baseTotal + adjustment;
+  var hasAdjust = Math.abs(percent) > 0.0001;
+
+  var priceEl = document.getElementById('price');
+  priceEl.textContent = finalTotal.toFixed(2) + ' ₽';
+  priceEl.className = 'price' + (hasAdjust ? (percent < 0 ? ' discount' : ' markup') : '');
+
+  var labelEl = document.getElementById('result-label');
+  if (hasAdjust) {
+    labelEl.textContent = 'Итого с учётом ' +
+      (percent < 0 ? 'скидки ' + Math.abs(percent) + '%' : 'наценки ' + percent + '%') +
+      ' (' + results.length + ' ' + plural(results.length, ['позиция', 'позиции', 'позиций']) + ')';
+  } else {
+    labelEl.textContent = 'Итого (' + results.length + ' ' +
+      plural(results.length, ['позиция', 'позиции', 'позиций']) + ')';
   }
 
+  var html = '';
+  results.forEach(function(r) {
+    var detail = '№' + r.num + ': ' + r.w + ' × ' + r.h + ' ' + r.unitLabel + ' → ' + r.area.toFixed(3) + ' м²';
+    r.services.forEach(function(sv) {
+      detail += sv.unit === 'm2'
+        ? ' + ' + sv.name.toLowerCase() + ' ' + sv.base.toFixed(3) + ' м²'
+        : ' + ' + sv.name.toLowerCase() + ' ' + sv.base.toFixed(2) + ' пог.м';
+    });
+    html += '<div class="row-line"><span>' + escapeHtml(detail) + '</span><span>' + r.total.toFixed(2) + ' ₽</span></div>';
+  });
+  html += '<div class="row-line" style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(255,255,255,0.3);opacity:0.95;"><span>Материал всего</span><span>' + materialSum.toFixed(2) + ' ₽</span></div>';
+  enabledServices.forEach(function(svc) {
+    var sum = results.reduce(function(s, r) {
+      var f = r.services.find(function(x) { return x.id === svc.id; });
+      return s + (f ? f.cost : 0);
+    }, 0);
+    html += '<div class="row-line" style="opacity:0.95;"><span>🔧 ' + escapeHtml(svc.name) + ' всего</span><span>' + sum.toFixed(2) + ' ₽</span></div>';
+  });
+  if (hasAdjust) {
+    html += '<div class="row-line" style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(255,255,255,0.3);opacity:0.95;"><span>Подытог</span><span>' + baseTotal.toFixed(2) + ' ₽</span></div>';
+    html += '<div class="row-line ' + (percent < 0 ? 'adjust-line' : 'markup-line') + '"><span>' +
+      (percent < 0 ? 'Скидка ' + Math.abs(percent) + '%' : 'Наценка ' + percent + '%') + '</span><span>' +
+      (adjustment >= 0 ? '+' : '−') + Math.abs(adjustment).toFixed(2) + ' ₽</span></div>';
+  }
   document.getElementById('breakdown').innerHTML = html;
 }
 
-/* ---------- Очистка ---------- */
-function clearAllRows() {
-  document.querySelectorAll('.calc-row:not(.header) input').forEach(function(inp) {
-    inp.value = '';
+/* ============ СБОР ДАННЫХ ============ */
+function collectCurrentData() {
+  var idx = parseInt(document.getElementById('material').value, 10);
+  if (!materials[idx]) return null;
+  var enabled = getEnabledServices();
+  var factor = UNIT_FACTORS[currentUnit];
+  var rowsData = [], totals = [];
+  document.querySelectorAll('.calc-row:not(.header)').forEach(function(row) {
+    var w = parseFloat(row.querySelector('.w-input').value);
+    var h = parseFloat(row.querySelector('.h-input').value);
+    if (!w || !h || w <= 0 || h <= 0) return;
+    var wM = w * factor, hM = h * factor;
+    var area = wM * hM, perimeter = 2 * (wM + hM);
+    var matCost = area * materials[idx].price;
+    var services = enabled.map(function(svc) {
+      var base = svc.unit === 'm2' ? area : perimeter;
+      return { name: svc.name, unit: svc.unit, price: svc.price, base: base, cost: base * svc.price };
+    });
+    var rowTotal = matCost + services.reduce(function(s, x) { return s + x.cost; }, 0);
+    rowsData.push({ w: w, h: h, area: area, total: rowTotal });
+    totals.push({ matCost: matCost, total: rowTotal });
   });
-  calculateAll();
-  showToast('Строки очищены');
+  if (rowsData.length === 0) return null;
+
+  var subtotal = totals.reduce(function(s, r) { return s + r.total; }, 0);
+  var percent = getPercentValue();
+  var adjustment = subtotal * (percent / 100);
+  var finalTotal = subtotal + adjustment;
+
+  return {
+    id: uid('h'),
+    timestamp: new Date().toISOString(),
+    clientName: (document.getElementById('client-name').value || '').trim(),
+    unit: currentUnit,
+    materialName: materials[idx].name,
+    materialPrice: materials[idx].price,
+    services: enabled.map(function(s) { return { name: s.name, price: s.price, unit: s.unit }; }),
+    rows: rowsData,
+    subtotal: subtotal,
+    percent: percent,
+    adjustment: adjustment,
+    total: finalTotal
+  };
 }
 
-/* ---------- Админ ---------- */
+/* ============ СОХРАНЕНИЕ В ИСТОРИЮ ============ */
+function saveToHistory() {
+  try {
+    var data = collectCurrentData();
+    if (!data) { showToast('Нет данных для сохранения', true); return; }
+    calcHistory.unshift(data);
+    saveHistory();
+    renderHistory();
+    showToast('✅ Сохранено в историю' + (data.clientName ? ': ' + data.clientName : ''));
+  } catch (e) { console.error(e); showToast('Ошибка: ' + e.message, true); }
+}
+
+/* ============ РЕНДЕР ИСТОРИИ ============ */
+function renderHistory() {
+  var container = document.getElementById('history-container');
+  var countEl = document.getElementById('history-count');
+  var clearBtn = document.getElementById('clear-history-btn');
+  if (countEl) countEl.textContent = calcHistory.length;
+
+  if (calcHistory.length === 0) {
+    container.innerHTML = '<div class="history-empty"><div class="big-icon">📋</div>' +
+      '<p>История пуста.<br>Сохраните первый расчёт на странице калькулятора.</p></div>';
+    if (clearBtn) clearBtn.disabled = true;
+    return;
+  }
+  if (clearBtn) clearBtn.disabled = false;
+
+  container.innerHTML = '<div class="history-list">' + calcHistory.map(function(h) {
+    var hasAdjust = Math.abs(h.percent) > 0.0001;
+    var priceClass = hasAdjust ? (h.percent < 0 ? 'discount' : 'markup') : '';
+    var nameHtml = h.clientName ? escapeHtml(h.clientName) : '<span class="no-name">— без имени —</span>';
+    var rowsHtml = h.rows.map(function(r, i) {
+      return '<div class="row-sz"><span>№' + (i + 1) + ': ' + r.w + ' × ' + r.h + ' ' + UNIT_LABELS[h.unit] + '</span>' +
+        '<span>' + (r.area || 0).toFixed(3) + ' м²</span></div>';
+    }).join('');
+    var servicesHtml = '';
+    if (h.services && h.services.length) {
+      servicesHtml = '<div class="services-list-history">' + h.services.map(function(s) {
+        return '<div class="srv-line"><span>🔧 ' + escapeHtml(s.name) + '</span>' +
+          '<span>' + s.price + ' ' + (s.unit === 'm2' ? '₽/м²' : '₽/пог.м') + '</span></div>';
+      }).join('') + '</div>';
+    }
+    return '<div class="history-item" data-history-id="' + escapeHtml(h.id) + '">' +
+      '<div class="history-item-actions">' +
+        '<button class="pdf-history-btn" data-pdf-history="' + escapeHtml(h.id) + '" title="Скачать PDF">📄</button>' +
+        '<button class="del-history-btn" data-del-history="' + escapeHtml(h.id) + '" title="Удалить">✕</button>' +
+      '</div>' +
+      '<div class="history-item-header">' +
+        '<div class="history-client-name">' + nameHtml + '</div>' +
+        '<div class="history-date">' + escapeHtml(formatDate(h.timestamp)) + '</div>' +
+      '</div>' +
+      '<div class="history-item-body">' +
+        '<div class="history-line"><span class="k">Материал:</span><span class="v">' +
+          escapeHtml(h.materialName) + ' (' + h.materialPrice + ' ₽/м²)</span></div>' +
+        '<div class="history-line"><span class="k">Единицы:</span><span class="v">' + UNIT_LABELS[h.unit] + '</span></div>' +
+        '<div class="rows-history">' + rowsHtml + '</div>' + servicesHtml +
+        (hasAdjust
+          ? '<div class="history-line"><span class="k">Подытог:</span><span class="v">' + h.subtotal.toFixed(2) + ' ₽</span></div>' +
+            '<div class="history-line"><span class="k">' +
+            (h.percent < 0 ? 'Скидка ' + Math.abs(h.percent) + '%' : 'Наценка ' + h.percent + '%') +
+            ':</span><span class="v">' +
+            (h.adjustment >= 0 ? '+' : '−') + Math.abs(h.adjustment).toFixed(2) + ' ₽</span></div>'
+          : '') +
+      '</div>' +
+      '<div class="history-total-row"><span class="history-total-label">ИТОГО</span>' +
+      '<span class="history-total-value ' + priceClass + '">' + h.total.toFixed(2) + ' ₽</span></div>' +
+    '</div>';
+  }).join('') + '</div>';
+}
+
+/* ============ УДАЛЕНИЕ ИЗ ИСТОРИИ ============ */
+function deleteHistoryItem(id) {
+  var item = calcHistory.find(function(h) { return h.id === id; });
+  if (!item) return;
+  pendingDelete = { type: 'history-item', id: id };
+  document.getElementById('confirm-text').innerHTML =
+    'Удалить этот расчёт из истории' + (item.clientName ? ' («' + escapeHtml(item.clientName) + '»)?' : '?');
+  document.getElementById('confirm-yes').textContent = 'Удалить';
+  document.getElementById('confirm-modal').classList.add('show');
+}
+function clearAllHistory() {
+  if (calcHistory.length === 0) return;
+  pendingDelete = { type: 'history-all', id: null };
+  document.getElementById('confirm-text').innerHTML =
+    'Очистить ВСЮ историю (' + calcHistory.length + ' ' +
+    plural(calcHistory.length, ['запись', 'записи', 'записей']) + ')?' +
+    '<br><br><span style="color:#e74c3c;font-weight:700;">Это действие нельзя отменить.</span>';
+  document.getElementById('confirm-yes').textContent = 'Очистить';
+  document.getElementById('confirm-modal').classList.add('show');
+}
+
+/* ============ PDF ЭКСПОРТ (ТОЛЬКО ИТОГОВАЯ ЦЕНА) ============ */
+function isPdfLibReady() {
+  return typeof window.html2canvas === 'function' &&
+         window.jspdf && typeof window.jspdf.jsPDF === 'function';
+}
+function buildPdfHtml(data) {
+  var unitLabel = UNIT_LABELS[data.unit] || 'см';
+  var dateStr = formatDate(data.timestamp);
+
+  var rowsHtml = data.rows.map(function(r, i) {
+    return '<tr>' +
+      '<td style="text-align:center;padding:6px;">' + (i + 1) + '</td>' +
+      '<td style="padding:6px;">' + r.w + ' × ' + r.h + ' ' + unitLabel + '</td>' +
+      '<td style="text-align:right;padding:6px;">' + r.area.toFixed(3) + ' м²</td>' +
+    '</tr>';
+  }).join('');
+
+  var servicesHtml = '';
+  if (data.services && data.services.length) {
+    servicesHtml =
+      '<div style="font-size:14px;font-weight:700;color:#667eea;margin:20px 0 8px;border-bottom:1px solid #e0e5f5;padding-bottom:6px;">Дополнительные обработки</div>' +
+      '<ul style="margin:0;padding-left:20px;font-size:13px;color:#555;list-style:none;">' +
+      data.services.map(function(s) {
+        return '<li style="padding:4px 0;">• ' + escapeHtml(s.name) + '</li>';
+      }).join('') +
+      '</ul>';
+  }
+
+  return '<div style="padding:25px;background:#fff;">' +
+    '<div style="text-align:center;border-bottom:3px solid #667eea;padding-bottom:15px;margin-bottom:20px;">' +
+      '<h1 style="margin:0;color:#333;font-size:24px;">Расчёт стоимости печати</h1>' +
+    '</div>' +
+    '<table style="width:100%;margin-bottom:20px;font-size:14px;border-collapse:collapse;">' +
+      '<tr><td style="padding:4px 0;color:#8891b5;font-weight:600;">Дата:</td>' +
+        '<td style="text-align:right;font-weight:700;">' + dateStr + '</td></tr>' +
+      (data.clientName
+        ? '<tr><td style="padding:4px 0;color:#8891b5;font-weight:600;">Для кого:</td>' +
+          '<td style="text-align:right;font-weight:700;color:#667eea;">' + escapeHtml(data.clientName) + '</td></tr>'
+        : '') +
+      '<tr><td style="padding:4px 0;color:#8891b5;font-weight:600;">Материал:</td>' +
+        '<td style="text-align:right;font-weight:700;">' + escapeHtml(data.materialName) + '</td></tr>' +
+      '<tr><td style="padding:4px 0;color:#8891b5;font-weight:600;">Единицы:</td>' +
+        '<td style="text-align:right;font-weight:700;">' + unitLabel + '</td></tr>' +
+    '</table>' +
+    '<div style="font-size:14px;font-weight:700;color:#667eea;margin-bottom:8px;border-bottom:1px solid #e0e5f5;padding-bottom:6px;">Размеры</div>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+      '<thead><tr style="background:#f8f9ff;">' +
+        '<th style="padding:8px;text-align:center;border:1px solid #e0e5f5;width:40px;">#</th>' +
+        '<th style="padding:8px;text-align:left;border:1px solid #e0e5f5;">Размер</th>' +
+        '<th style="padding:8px;text-align:right;border:1px solid #e0e5f5;">Площадь</th>' +
+      '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+    servicesHtml +
+    '<div style="margin-top:25px;padding:20px;background:#f8f9ff;border-radius:10px;border:2px solid #667eea;">' +
+      '<table style="width:100%;font-size:16px;border-collapse:collapse;"><tr>' +
+        '<td style="padding:5px;font-size:18px;font-weight:700;color:#333;">ИТОГО:</td>' +
+        '<td style="padding:5px;text-align:right;font-size:26px;font-weight:800;color:#667eea;">' +
+          data.total.toFixed(2) + ' ₽</td>' +
+      '</tr></table>' +
+    '</div>' +
+    '<div style="margin-top:30px;text-align:center;font-size:11px;color:#8891b5;border-top:1px dashed #e0e5f5;padding-top:10px;">' +
+      'Документ сформирован ' + formatDate(new Date().toISOString()) +
+    '</div>' +
+  '</div>';
+}
+async function exportCalculationToPdf(data) {
+  if (!data) { showToast('Нет данных для PDF', true); return; }
+  if (!isPdfLibReady()) {
+    showToast('PDF-библиотека не загружена.', true);
+    return;
+  }
+  showToast('Формируем PDF...');
+  var container = document.createElement('div');
+  container.style.cssText = 'position:fixed;left:-99999px;top:0;width:750px;background:#fff;font-family:Arial,sans-serif;color:#333;';
+  container.innerHTML = buildPdfHtml(data);
+  document.body.appendChild(container);
+
+  try {
+    var canvas = await window.html2canvas(container, {
+      scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false
+    });
+    var jsPDF = window.jspdf.jsPDF;
+    var pdf = new jsPDF('p', 'mm', 'a4');
+    var pdfW = pdf.internal.pageSize.getWidth();
+    var pdfH = pdf.internal.pageSize.getHeight();
+    var margin = 10;
+    var imgW = pdfW - margin * 2;
+    var imgH = (canvas.height * imgW) / canvas.width;
+
+    if (imgH <= pdfH - margin * 2) {
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, imgW, imgH);
+    } else {
+      var pageContentHmm = pdfH - margin * 2;
+      var sliceHpx = (pageContentHmm * canvas.width) / imgW;
+      var sourceY = 0;
+      var page = 0;
+      while (sourceY < canvas.height) {
+        var curSliceH = Math.min(sliceHpx, canvas.height - sourceY);
+        var sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = curSliceH;
+        sliceCanvas.getContext('2d').drawImage(
+          canvas, 0, sourceY, canvas.width, curSliceH, 0, 0, canvas.width, curSliceH
+        );
+        var sliceHmm = (curSliceH * imgW) / canvas.width;
+        if (page > 0) pdf.addPage();
+        pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, imgW, sliceHmm);
+        sourceY += curSliceH;
+        page++;
+      }
+    }
+
+    var safeName = (data.clientName || 'расчет')
+      .replace(/[^a-zA-Zа-яА-Я0-9_\- ]/g, '').replace(/\s+/g, '_') || 'расчет';
+    var datePart = new Date(data.timestamp).toISOString().slice(0, 10);
+    var fname = 'Расчет_' + safeName + '_' + datePart + '.pdf';
+    pdf.save(fname);
+    showToast('✅ PDF сохранён: ' + fname);
+  } catch (e) {
+    console.error('[exportPdf]', e);
+    showToast('Ошибка PDF: ' + e.message, true);
+  } finally {
+    container.remove();
+  }
+}
+function exportCurrentToPdf() {
+  var data = collectCurrentData();
+  if (!data) { showToast('Нет данных для PDF', true); return; }
+  exportCalculationToPdf(data);
+}
+function exportHistoryToPdf(id) {
+  var item = calcHistory.find(function(h) { return h.id === id; });
+  if (!item) { showToast('Запись не найдена', true); return; }
+  exportCalculationToPdf(item);
+}
+
+/* ============ МОДАЛКА ============ */
+function askDeleteMaterial(idx) {
+  if (!materials[idx]) return;
+  pendingDelete = { type: 'material', id: idx };
+  document.getElementById('confirm-text').innerHTML =
+    'Удалить материал<br><b>«' + escapeHtml(materials[idx].name) + '»</b>?';
+  document.getElementById('confirm-yes').textContent = 'Удалить';
+  document.getElementById('confirm-modal').classList.add('show');
+}
+function askDeleteService(id) {
+  var svc = (settings.services || []).find(function(s) { return s.id === id; });
+  if (!svc) return;
+  pendingDelete = { type: 'service', id: id };
+  document.getElementById('confirm-text').innerHTML =
+    'Удалить обработку<br><b>«' + escapeHtml(svc.name) + '»</b>?';
+  document.getElementById('confirm-yes').textContent = 'Удалить';
+  document.getElementById('confirm-modal').classList.add('show');
+}
+function cancelDelete() {
+  pendingDelete = null;
+  document.getElementById('confirm-modal').classList.remove('show');
+  var yesBtn = document.getElementById('confirm-yes');
+  if (yesBtn) yesBtn.textContent = 'Удалить';
+}
+function confirmDelete() {
+  if (!pendingDelete) return;
+  var pd = pendingDelete;
+  try {
+    if (pd.type === 'material') {
+      var idx = pd.id;
+      var name = materials[idx] ? materials[idx].name : '';
+      materials.splice(idx, 1);
+      saveMaterials();
+      renderAdminMaterials();
+      renderMaterialSelect();
+      calculateAll();
+      showToast('Удалено: ' + name);
+    } else if (pd.type === 'service') {
+      var sid = pd.id;
+      var svc = (settings.services || []).find(function(s) { return s.id === sid; });
+      var svcName = svc ? svc.name : '';
+      settings.services = (settings.services || []).filter(function(s) { return s.id !== sid; });
+      saveSettings();
+      renderAdminServices();
+      saveCalcState();
+      renderServices();
+      loadCalcState();
+      calculateAll();
+      showToast('Удалено: ' + svcName);
+    } else if (pd.type === 'history-item') {
+      calcHistory = calcHistory.filter(function(h) { return h.id !== pd.id; });
+      saveHistory();
+      renderHistory();
+      showToast('Запись удалена');
+    } else if (pd.type === 'history-all') {
+      var count = calcHistory.length;
+      calcHistory = [];
+      saveHistory();
+      renderHistory();
+      showToast('История очищена (' + count + ' ' +
+        plural(count, ['запись', 'записи', 'записей']) + ')');
+    } else if (pd.type === 'reset-all') {
+      doResetAll();
+    }
+  } catch (e) {
+    console.error('[confirmDelete]', e);
+    showToast('Ошибка: ' + e.message, true);
+  }
+  cancelDelete();
+}
+
+/* ============ ЭКСПОРТ / ИМПОРТ JSON ============ */
+function exportToFile() {
+  try {
+    var state = {
+      rows: [],
+      percent: getPercentValue(),
+      clientName: (document.getElementById('client-name').value || '')
+    };
+    document.querySelectorAll('.calc-row:not(.header)').forEach(function(row) {
+      state.rows.push({
+        w: row.querySelector('.w-input').value,
+        h: row.querySelector('.h-input').value
+      });
+    });
+    var data = {
+      version: 6,
+      exportedAt: new Date().toISOString(),
+      unit: currentUnit,
+      materials: materials,
+      settings: settings,
+      calcState: state,
+      history: calcHistory
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'print-calculator-settings-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+    showToast('Файл сохранён (включая историю)');
+  } catch (e) { showToast('Ошибка: ' + e.message, true); }
+}
+function triggerImport() { document.getElementById('import-file').click(); }
+function handleImportFile(e) {
+  var file = e.target.files && e.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      var data = JSON.parse(ev.target.result);
+      if (!data || typeof data !== 'object') throw new Error('Неверный формат');
+      if (Array.isArray(data.materials)) {
+        materials = data.materials.map(function(m) {
+          return { name: safeStr(m && m.name, 'Материал'), price: safeNum(m && m.price, 0) };
+        });
+      }
+      if (data.settings && Array.isArray(data.settings.services)) {
+        settings = { services: data.settings.services.map(function(sv) {
+          return {
+            id: safeStr(sv && sv.id) || uid('svc'),
+            name: safeStr(sv && sv.name, 'Обработка'),
+            price: safeNum(sv && sv.price, 0),
+            unit: (sv && sv.unit === 'm2') ? 'm2' : 'lm'
+          };
+        })};
+      }
+      if (Array.isArray(data.history)) {
+        calcHistory = data.history.map(function(h) {
+          return {
+            id: safeStr(h && h.id) || uid('h'),
+            timestamp: safeStr(h && h.timestamp, new Date().toISOString()),
+            clientName: safeStr(h && h.clientName, ''),
+            unit: (h && (h.unit === 'mm' || h.unit === 'cm' || h.unit === 'm')) ? h.unit : 'cm',
+            materialName: safeStr(h && h.materialName, '—'),
+            materialPrice: safeNum(h && h.materialPrice, 0),
+            services: Array.isArray(h && h.services) ? h.services : [],
+            rows: Array.isArray(h && h.rows) ? h.rows : [],
+            subtotal: safeNum(h && h.subtotal, 0),
+            percent: Number(h && h.percent) || 0,
+            adjustment: Number(h && h.adjustment) || 0,
+            total: safeNum(h && h.total, 0)
+          };
+        });
+      }
+      if (data.unit && UNIT_FACTORS.hasOwnProperty(data.unit)) {
+        currentUnit = data.unit;
+        updateUnitsUI();
+      }
+      saveMaterials();
+      saveSettings();
+      saveHistory();
+      renderMaterialSelect();
+      renderAdmin();
+      renderServices();
+      renderHistory();
+
+      if (data.calcState && Array.isArray(data.calcState.rows) && data.calcState.rows.length > 0) {
+        ensureRowsCount(data.calcState.rows.length);
+        var rows = document.querySelectorAll('.calc-row:not(.header)');
+        data.calcState.rows.forEach(function(r, i) {
+          if (rows[i]) {
+            rows[i].querySelector('.w-input').value = r.w || '';
+            rows[i].querySelector('.h-input').value = r.h || '';
+          }
+        });
+      }
+      if (data.calcState && data.calcState.percent !== undefined) {
+        document.getElementById('percent-input').value = data.calcState.percent;
+      }
+      if (data.calcState && data.calcState.clientName !== undefined) {
+        document.getElementById('client-name').value = data.calcState.clientName;
+      }
+
+      loadCalcState();
+      calculateAll();
+      showToast('Импортировано: ' + materials.length + ' мат., ' +
+        settings.services.length + ' обраб., ' + calcHistory.length + ' записей');
+    } catch (err) {
+      console.error(err);
+      showToast('Ошибка импорта: ' + err.message, true);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+/* ============ АДМИН ============ */
 function login() {
   var inp = document.getElementById('admin-pass');
   if (inp.value.trim() === ADMIN_PASSWORD) {
@@ -552,8 +1611,9 @@ function login() {
     document.getElementById('admin-content').style.display = 'block';
     renderAdmin();
   } else {
-    showToast('Неверный пароль. Введите: admin', true);
-    inp.value = ''; inp.focus();
+    showToast('Неверный пароль', true);
+    inp.value = '';
+    inp.focus();
   }
 }
 function logout() {
@@ -561,148 +1621,223 @@ function logout() {
   document.getElementById('admin-login').style.display = 'block';
   document.getElementById('admin-content').style.display = 'none';
 }
-
-function renderAdmin() {
-  document.getElementById('cut-price-input').value = settings.cutPrice;
-  var list = document.getElementById('materials-list');
-  if (materials.length === 0) {
-    list.innerHTML = '<p style="color:#888;text-align:center;padding:20px;">' +
-      'Нет материалов. Нажмите «Добавить материал».</p>';
-    return;
-  }
-  list.innerHTML = materials.map(function(m, i) {
-    return '<div class="admin-card">' +
-      '<input type="text" value="' + escapeHtml(m.name) + '" data-idx="' + i + '" data-field="name">' +
-      '<input type="number" value="' + m.price + '" min="0" step="1" data-idx="' + i + '" data-field="price">' +
-      '<span style="color:#888;font-size:13px;">₽/м²</span>' +
-      '<button class="del-btn" data-del="' + i + '" type="button" title="Удалить">✕</button>' +
-    '</div>';
-  }).join('');
-}
-
-function askDelete(idx) {
-  if (!materials[idx]) return;
-  pendingDeleteIdx = idx;
+function resetAll() {
+  pendingDelete = { type: 'reset-all', id: null };
   document.getElementById('confirm-text').innerHTML =
-    'Удалить материал<br><b>«' + escapeHtml(materials[idx].name) + '»</b>?';
+    'Сбросить ВСЕ настройки к заводским?<br><br>История расчётов <b>НЕ затрагивается</b>.';
+  document.getElementById('confirm-yes').textContent = 'Сбросить';
   document.getElementById('confirm-modal').classList.add('show');
 }
-function cancelDelete() {
-  pendingDeleteIdx = -1;
-  document.getElementById('confirm-modal').classList.remove('show');
-}
-function confirmDelete() {
-  if (pendingDeleteIdx < 0) return;
-  var idx = pendingDeleteIdx;
-  var name = materials[idx] ? materials[idx].name : 'материал';
-  materials.splice(idx, 1);
+function doResetAll() {
+  storageRemove('printMaterials');
+  storageRemove('printSettings');
+  storageRemove('printCalcState');
+  materials = JSON.parse(JSON.stringify(DEFAULT_MATERIALS));
+  settings = { services: JSON.parse(JSON.stringify(DEFAULT_SETTINGS.services)) };
+  currentUnit = 'cm';
+  updateUnitsUI();
   saveMaterials();
-  renderAdmin();
+  saveSettings();
+  ensureRowsCount(1);
+  document.querySelectorAll('.calc-row:not(.header) input').forEach(function(i) { i.value = ''; });
+  document.getElementById('percent-input').value = '';
+  document.getElementById('client-name').value = '';
   renderMaterialSelect();
+  renderAdmin();
+  renderServices();
   calculateAll();
-  cancelDelete();
-  showToast('Удалено: ' + name);
+  saveCalcState();
+  showToast('Настройки сброшены');
 }
 
-/* ---------- Инициализация ---------- */
+/* ============ ИНИЦИАЛИЗАЦИЯ ============ */
 function init() {
-  materials = loadMaterials();
-  settings = loadSettings();
+  try {
+    updateStorageBanner();
+    materials = loadMaterials();
+    var ls = loadSettings();
+    settings = { services: ls.services || [] };
+    if (ls.unit) currentUnit = ls.unit;
+    calcHistory = loadHistory();
 
-  document.querySelectorAll('.tab').forEach(function(tab) {
-    tab.addEventListener('click', function() { switchTab(tab.dataset.tab); });
-  });
+    document.querySelectorAll('.tab').forEach(function(tab) {
+      tab.addEventListener('click', function() { switchTab(tab.dataset.tab); });
+    });
+    document.querySelectorAll('#units-seg button').forEach(function(btn) {
+      btn.addEventListener('click', function() { setUnit(btn.dataset.unit); });
+    });
 
-  buildRows();
-  renderMaterialSelect();
-  updateCutHint();
-
-  // Калькулятор — пересчёт при любом изменении
-  document.getElementById('material').addEventListener('change', calculateAll);
-  document.getElementById('cut-enabled').addEventListener('change', function() {
-    updateCutHint();
+    addRow();
+    updateUnitsUI();
+    renderMaterialSelect();
+    renderServices();
+    loadCalcState();
     calculateAll();
-  });
-  document.getElementById('clear-btn').addEventListener('click', clearAllRows);
+    renderHistory();
 
-  // Переключатель суммы
-  var sumCb = document.getElementById('sum-enabled');
-  var sumLabel = document.getElementById('sum-toggle-label');
-  function syncSumLabel() {
-    sumLabel.classList.toggle('checked', sumCb.checked);
-  }
-  sumCb.addEventListener('change', function() {
-    syncSumLabel();
-    calculateAll();
-  });
-  sumLabel.addEventListener('click', function(e) {
-    if (e.target !== sumCb && !e.target.classList.contains('slider')) {
-      e.preventDefault();
-      sumCb.checked = !sumCb.checked;
-      syncSumLabel();
+    document.getElementById('add-row-btn').addEventListener('click', function() {
+      addRow(null, true);
       calculateAll();
-    }
-  });
-  syncSumLabel();
+      saveCalcState();
+    });
+    document.getElementById('clear-btn').addEventListener('click', clearAllRows);
+    document.getElementById('material').addEventListener('change', function() {
+      calculateAll();
+      saveCalcState();
+    });
 
-  // Админ
-  document.getElementById('login-btn').addEventListener('click', login);
-  document.getElementById('admin-pass').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') { e.preventDefault(); login(); }
-  });
-  document.getElementById('logout-btn').addEventListener('click', logout);
-  document.getElementById('cut-price-input').addEventListener('input', function() {
-    settings.cutPrice = Math.max(0, parseFloat(this.value) || 0);
-    updateCutHint();
-  });
-  document.getElementById('add-mat-btn').addEventListener('click', function() {
-    materials.push({ name: 'Новый материал', price: 100 });
-    saveMaterials(); renderAdmin(); renderMaterialSelect();
-    showToast('Материал добавлен');
-  });
-  document.getElementById('save-btn').addEventListener('click', function() {
-    var ok1 = saveMaterials();
-    var ok2 = saveSettings();
-    if (ok1 && ok2) {
+    var sumCb = document.getElementById('sum-enabled');
+    var sumLabel = document.getElementById('sum-toggle-label');
+    function syncSum() { sumLabel.classList.toggle('checked', sumCb.checked); }
+    syncSum();
+    sumCb.addEventListener('change', function() {
+      syncSum();
+      calculateAll();
+      saveCalcState();
+    });
+    sumLabel.addEventListener('click', function(e) {
+      if (e.target !== sumCb && !e.target.classList.contains('slider')) {
+        e.preventDefault();
+        sumCb.checked = !sumCb.checked;
+        syncSum();
+        calculateAll();
+        saveCalcState();
+      }
+    });
+
+    var pe = document.getElementById('percent-input');
+    pe.addEventListener('input', function() { calculateAll(); saveCalcState(); });
+    pe.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); this.blur(); } });
+
+    var cn = document.getElementById('client-name');
+    cn.addEventListener('input', function() { saveCalcState(); });
+    cn.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); this.blur(); } });
+
+    document.getElementById('save-history-btn').addEventListener('click', saveToHistory);
+    document.getElementById('pdf-current-btn').addEventListener('click', exportCurrentToPdf);
+    document.getElementById('clear-history-btn').addEventListener('click', clearAllHistory);
+
+    var hc = document.getElementById('history-container');
+    hc.addEventListener('click', function(e) {
+      var delBtn = e.target.closest('[data-del-history]');
+      if (delBtn && hc.contains(delBtn)) {
+        e.preventDefault();
+        deleteHistoryItem(delBtn.dataset.delHistory);
+        return;
+      }
+      var pdfBtn = e.target.closest('[data-pdf-history]');
+      if (pdfBtn && hc.contains(pdfBtn)) {
+        e.preventDefault();
+        exportHistoryToPdf(pdfBtn.dataset.pdfHistory);
+      }
+    });
+
+    document.getElementById('login-btn').addEventListener('click', login);
+    document.getElementById('admin-pass').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); login(); }
+    });
+    document.getElementById('logout-btn').addEventListener('click', logout);
+    document.getElementById('reset-btn').addEventListener('click', resetAll);
+
+    document.getElementById('export-btn').addEventListener('click', exportToFile);
+    document.getElementById('import-btn').addEventListener('click', triggerImport);
+    document.getElementById('import-file').addEventListener('change', handleImportFile);
+
+    document.getElementById('add-svc-btn').addEventListener('click', function() {
+      saveCalcState();
+      settings.services.push({ id: uid('svc'), name: 'Новая обработка', price: 100, unit: 'lm' });
+      renderAdminServices();
+      renderServices();
+      loadCalcState();
+      calculateAll();
+    });
+    document.getElementById('add-mat-btn').addEventListener('click', function() {
+      materials.push({ name: 'Новый материал', price: 100 });
+      saveMaterials();
+      renderAdminMaterials();
       renderMaterialSelect();
-      updateCutHint();
       calculateAll();
-      showToast('✅ Сохранено');
-    }
-  });
+      saveCalcState();
+      showToast('Материал добавлен');
+    });
+    document.getElementById('save-btn').addEventListener('click', function() {
+      try {
+        saveCalcState();
+        var ok1 = saveMaterials();
+        var ok2 = saveSettings();
+        if (!ok1 || !ok2) {
+          showToast(STORAGE_MODE === 'memory'
+            ? 'Сохранено в памяти (до закрытия). Для постоянного — экспорт в файл.'
+            : 'Ошибка сохранения. Проверьте консоль.', true);
+        } else {
+          showToast('✅ Сохранено');
+        }
+        renderMaterialSelect();
+        renderServices();
+        loadCalcState();
+        calculateAll();
+      } catch (e) { showToast('Ошибка: ' + e.message, true); }
+    });
 
-  // Делегирование для списка материалов
-  var list = document.getElementById('materials-list');
-  list.addEventListener('input', function(e) {
-    var inp = e.target;
-    if (!inp.dataset || inp.dataset.idx === undefined) return;
-    var i = parseInt(inp.dataset.idx, 10);
-    if (!materials[i]) return;
-    if (inp.dataset.field === 'name') materials[i].name = inp.value;
-    else if (inp.dataset.field === 'price')
-      materials[i].price = Math.max(0, parseFloat(inp.value) || 0);
-  });
-  list.addEventListener('click', function(e) {
-    var btn = e.target.closest('[data-del]');
-    if (!btn || !list.contains(btn)) return;
-    e.preventDefault();
-    var i = parseInt(btn.dataset.del, 10);
-    if (!isNaN(i)) askDelete(i);
-  });
+    var ml = document.getElementById('materials-list');
+    ml.addEventListener('input', function(e) {
+      var inp = e.target;
+      if (!inp.dataset || inp.dataset.idx === undefined) return;
+      var i = parseInt(inp.dataset.idx, 10);
+      if (!materials[i]) return;
+      if (inp.dataset.field === 'name') materials[i].name = safeStr(inp.value, 'Материал');
+      else if (inp.dataset.field === 'price') materials[i].price = safeNum(inp.value, 0);
+    });
+    ml.addEventListener('click', function(e) {
+      var btn = e.target.closest('[data-del]');
+      if (!btn || !ml.contains(btn)) return;
+      e.preventDefault();
+      var i = parseInt(btn.dataset.del, 10);
+      if (!isNaN(i)) askDeleteMaterial(i);
+    });
 
-  // Модалка
-  document.getElementById('confirm-yes').addEventListener('click', confirmDelete);
-  document.getElementById('confirm-no').addEventListener('click', cancelDelete);
-  document.getElementById('confirm-modal').addEventListener('click', function(e) {
-    if (e.target === this) cancelDelete();
-  });
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') cancelDelete();
-  });
+    var sl = document.getElementById('services-admin-list');
+    sl.addEventListener('input', function(e) {
+      var inp = e.target;
+      var card = inp.closest('[data-svc-id]');
+      if (!card) return;
+      var svc = (settings.services || []).find(function(s) { return s.id === card.dataset.svcId; });
+      if (!svc) return;
+      if (inp.dataset.field === 'name') svc.name = inp.value;
+      else if (inp.dataset.field === 'price') svc.price = safeNum(inp.value, 0);
+    });
+    sl.addEventListener('change', function(e) {
+      var inp = e.target;
+      if (inp.dataset && inp.dataset.field === 'unit') {
+        var card = inp.closest('[data-svc-id]');
+        if (!card) return;
+        var svc = (settings.services || []).find(function(s) { return s.id === card.dataset.svcId; });
+        if (svc) svc.unit = (inp.value === 'm2') ? 'm2' : 'lm';
+      }
+    });
+    sl.addEventListener('click', function(e) {
+      var btn = e.target.closest('[data-del-svc]');
+      if (!btn || !sl.contains(btn)) return;
+      e.preventDefault();
+      askDeleteService(btn.dataset.delSvc);
+    });
 
-  console.log('[init] Строк:', ROWS_COUNT,
-              '| материалов:', materials.length,
-              '| цена резки:', settings.cutPrice, '₽/пог.м');
+    document.getElementById('confirm-yes').addEventListener('click', confirmDelete);
+    document.getElementById('confirm-no').addEventListener('click', cancelDelete);
+    document.getElementById('confirm-modal').addEventListener('click', function(e) {
+      if (e.target === this) cancelDelete();
+    });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') cancelDelete(); });
+
+    console.log('[init] ready | unit:', currentUnit,
+      '| materials:', materials.length,
+      '| services:', settings.services.length,
+      '| history:', calcHistory.length,
+      '| storage:', STORAGE_MODE);
+  } catch (e) {
+    console.error('[init] FATAL:', e);
+    showToast('Ошибка запуска: ' + e.message, true);
+  }
 }
 
 init();

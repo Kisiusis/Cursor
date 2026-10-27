@@ -10,12 +10,13 @@ let mainWindow = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 820,
-    height: 1040,
+    width: 960,
+    height: 1100,
     minWidth: 420,
     minHeight: 640,
     show: false,
     title: 'Калькулятор печати',
+    icon: path.join(__dirname, 'build', 'icon.png'),
     backgroundColor: '#667eea',
     autoHideMenuBar: true,
     webPreferences: {
