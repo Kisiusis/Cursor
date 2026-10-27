@@ -41,6 +41,8 @@ app.whenReady().then(async () => {
 
   try {
     await win.loadFile(path.join(__dirname, '..', 'index.html'));
+    await win.webContents.executeJavaScript('localStorage.clear()');
+    await win.loadFile(path.join(__dirname, '..', 'index.html'));
     const libs = await win.webContents.executeJavaScript(`({
       html2canvas: typeof window.html2canvas === 'function',
       jspdf: !!(window.jspdf && typeof window.jspdf.jsPDF === 'function'),
