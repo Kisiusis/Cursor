@@ -2,10 +2,10 @@
 
 Файл `index.html` не меняется: те же стили, разметка и расчёт.
 
-Готовые файлы лежат в этой же папке:
+Готовые файлы лежат в этой же папке. Браузер часто пишет «вирус» на одиночный exe без платной подписи. Качайте архив, распакуйте и запустите программу внутри.
 
-- [PrintCalculator.exe](PrintCalculator.exe) — Windows, двойной щелчок.
-- [PrintCalculator.apk](PrintCalculator.apk) — Android. Откройте файл на телефоне и разрешите установку.
+- [PrintCalculator-Windows.zip](PrintCalculator-Windows.zip) — Windows. Распакуйте и откройте `PrintCalculator.exe`. Если Windows покажет «Защита Windows», нажмите «Подробнее», затем «Выполнить в любом случае».
+- [PrintCalculator-Android.zip](PrintCalculator-Android.zip) — Android. Распакуйте и откройте `PrintCalculator.apk`, затем разрешите установку.
 
 Страница внутри обоих файлов — тот же `index.html`, без другой вёрстки. Окно называется «Калькулятор печати». Иконка — принтер с калькулятором.
 
@@ -37,9 +37,7 @@ npm install
 npm run build:win
 ```
 
-Готовый файл: `print-calculator/dist/Калькулятор-печати.exe`.
-
-Это portable-сборка: двойной щелчок распаковывает приложение в профиль пользователя и открывает калькулятор. Отдельная установка не нужна.
+Готовый архив для скачивания: `print-calculator/PrintCalculator-Windows.zip`. Внутри него `PrintCalculator.exe`.
 
 Проверка интерфейса и формул без сборки exe:
 
